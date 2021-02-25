@@ -32,7 +32,7 @@ class Switchboard(Env):
     def reset(self) -> NoReturn:
         pass
 
-    def step(self, action: int) -> Tuple[Lights, float, bool, dict]:
+    def step(self, action: int) -> Tuple[List[bool], float, bool, dict]:
         self.agent.current_action = self.agent.actions[action]
 
         # get a random instantiation of the light. Simulation the unobserved (natural) change of the environment
@@ -49,6 +49,7 @@ class Switchboard(Env):
             self.lights = [interv_scm[i]() for i in range(5)]
             if old_lights == self.lights:
                 break
+        self.agent.store_observation(self.lights)
 
         self.reset()
 
