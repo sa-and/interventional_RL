@@ -1,3 +1,5 @@
+from typing import List, Callable, Tuple, NoReturn
+
 from gym import Env
 from gym.spaces import Discrete
 import random
@@ -6,6 +8,12 @@ import copy
 
 
 class Switchboard(Env):
+    Agent: SwitchboardAgent
+    Function = Callable[[], bool]
+    SCM: List[Function]
+    U: List[bool]
+    Lights: List[bool]
+
     def __init__(self):
         super(Switchboard, self).__init__()
         self.observation_space = Discrete(5)
@@ -21,17 +29,19 @@ class Switchboard(Env):
         self.agent = SwitchboardAgent(len(self.lights))
         self.action_space = Discrete(len(self.agent.actions))
 
-    def reset(self):
+    def reset(self) -> NoReturn:
         pass
 
-    def step(self, action):
-        # get a random instatiation of the light. Simulation the unobserved (natural) change of the environment
+    def step(self, action: int) -> Tuple[Lights, float, bool, dict]:
+        self.agent.current_action = self.agent.actions[action]
+
+        # get a random instantiation of the light. Simulation the unobserved (natural) change of the environment
         self.U = random.choices([False, True], k=5)
 
         # apply intervention to the SCM
         interv_scm = copy.deepcopy(self.SCM)
-        if action != (None, None):
-            interv_scm[action[0]] = lambda: action[1]
+        if self.agent.current_action != (None, None):
+            interv_scm[self.agent.current_action[0]] = lambda: self.agent.current_action[1]
 
         # apply functions of SCM until no changes are done anymore
         while True:
@@ -42,6 +52,15 @@ class Switchboard(Env):
 
         self.reset()
 
-    def render(self, mode='human'):
-        if mode=='human':
-            print(self.lights)
+    def render(self, mode: str = 'human') -> NoReturn:
+        if mode == 'human':
+            out = ''
+            for i in range(len(self.lights)):
+                if self.lights[i]:
+                    out += '|'
+                else:
+                    out += 'O'
+                if self.agent.current_action[0] == i:
+                    out += '*'
+                out += '\t'
+            print(out)
