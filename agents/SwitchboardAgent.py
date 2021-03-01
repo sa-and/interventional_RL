@@ -38,21 +38,30 @@ class SwitchboardAgent:
     def get_est_postint_distrib(self, query: str, do: action) -> DataFrame:
         '''Computes and returns P(Query | do(action))'''
         query_dataframe = self.collected_data[str(do)]
-        query_dataframe = query_dataframe.replace([True, False], [1, 0]).groupby(query).count()/len(query_dataframe)
-        query_dataframe = query_dataframe.take([0], axis=1)
-        return query_dataframe.rename(columns={query_dataframe.columns[0]: 'P('+query+')'})
+        query_dataframe = query_dataframe.groupby(query).size()/len(query_dataframe)
+        return query_dataframe.rename('P('+query+'|do'+str(do)+')')
 
     def get_est_avg_causal_effect(self, query: str, action1: action, action2: action) -> float:
         assert action1[0] == action2[0], 'effect can only be measured on the same intervention variable'
 
-        exp_val1 = 0.0
-        for index, data in self.get_est_postint_distrib(query, action1).iterrows():
-            exp_val1 += index * data['P('+query+')']
-        exp_val2 = 0.0
-        for index, data in self.get_est_postint_distrib(query, action2).iterrows():
-            exp_val2 += index * data['P(' + query + ')']
+        dist1 = self.get_est_postint_distrib(query, action1)
+        dist2 = self.get_est_postint_distrib(query, action2)
+
+        #change boolean index to 0 and 1s
+        if type(dist1.index[0] == bool):
+            dist1 = dist1.rename({True: 1, False: 0})
+            dist2 = dist2.rename({True: 1, False: 0})
+
+        exp_val1 = sum(dist1.index.values * dist1._values)
+        exp_val2 = sum(dist2.index.values * dist2._values)
 
         return exp_val1 - exp_val2
+
+    def get_est_cond_distr(self, query: str, condition: Tuple[str, bool]) -> DataFrame:
+        obs_data = self.collected_data['(None, None)']
+        obs_data = obs_data[obs_data[condition[0]] == condition[1]]
+        obs_data = obs_data.groupby(query).size() / len(obs_data)
+        return obs_data.rename('P('+query+'|'+condition[0]+'='+str(condition[1])+')')
 
     def display_causal_model(self) -> NoReturn:
         fig, ax = plt.subplots()
