@@ -1,9 +1,12 @@
 from typing import Tuple, List, Optional, NoReturn
 from causalnex.structure import StructureModel
+from causalnex.network import BayesianNetwork
+from causalnex.inference import InferenceEngine
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
 from pandas import DataFrame
+from itertools import combinations, permutations
 
 
 class SwitchboardAgent:
@@ -14,7 +17,7 @@ class SwitchboardAgent:
     actions: List[action]
     current_action: action
 
-    def __init__(self, n_switches):
+    def __init__(self, n_switches: int, causal_graph: StructureModel = None):
         # create a dictonary of actions that can be performed on the switchboard
         self.actions = [(i, True) for i in range(n_switches)]
         self.actions.extend([(i, False) for i in range(n_switches)])
@@ -23,9 +26,12 @@ class SwitchboardAgent:
         self.var_names = ['x'+str(i) for i in range(n_switches)]
 
         # initialize causal model
-        self.causal_model = StructureModel()
-        [self.causal_model.add_node(name) for name in self.var_names]
-        # TODO: what about edges?
+        if causal_graph:
+            self.causal_model = causal_graph
+        else:
+            self.causal_model = StructureModel()
+            [self.causal_model.add_node(name) for name in self.var_names]
+            self.causal_model.add_edges_from([(v[0], v[1]) for v in combinations(self.var_names, 2)])# TODO: needs sensible init instead?
 
         # initialize the storages for observational and interventional data. (None, None) is the purely observational data
         self.collected_data = {str(action): pd.DataFrame(columns=self.var_names) for action in self.actions}
@@ -35,7 +41,7 @@ class SwitchboardAgent:
         obs_dict = {self.var_names[i]: obs[i] for i in range(len(self.var_names))}
         self.collected_data[str(self.current_action)] = self.collected_data[str(self.current_action)].append(obs_dict, ignore_index=True)
 
-    def get_est_postint_distrib(self, query: str, do: action) -> DataFrame:
+    def get_est_postint_distrib(self, query: str, do: action) -> pd.Series:
         '''Computes and returns P(Query | do(action))'''
         query_dataframe = self.collected_data[str(do)]
         query_dataframe = query_dataframe.groupby(query).size()/len(query_dataframe)
@@ -44,18 +50,16 @@ class SwitchboardAgent:
     def get_est_avg_causal_effect(self, query: str, action1: action, action2: action) -> float:
         assert action1[0] == action2[0], 'effect can only be measured on the same intervention variable'
 
-        dist1 = self.get_est_postint_distrib(query, action1)
-        dist2 = self.get_est_postint_distrib(query, action2)
-
-        #change boolean index to 0 and 1s
-        if type(dist1.index[0] == bool):
-            dist1 = dist1.rename({True: 1, False: 0})
-            dist2 = dist2.rename({True: 1, False: 0})
-
-        exp_val1 = sum(dist1.index.values * dist1._values)
-        exp_val2 = sum(dist2.index.values * dist2._values)
+        exp_val1 = self._get_expected_value(self.get_est_postint_distrib(query, action1))
+        exp_val2 = self._get_expected_value(self.get_est_postint_distrib(query, action2))
 
         return exp_val1 - exp_val2
+
+    @staticmethod
+    def _get_expected_value(distribution: pd.Series) -> float:
+        if type(distribution.index[0] == bool):
+            distribution = distribution.rename({True: 1, False: 0})
+        return sum(distribution.index.values * distribution._values)
 
     def get_est_cond_distr(self, query: str, condition: Tuple[str, bool]) -> DataFrame:
         obs_data = self.collected_data['(None, None)']
@@ -68,3 +72,58 @@ class SwitchboardAgent:
         nx.draw_circular(self.causal_model, ax=ax, with_labels=True)
         fig.show()
 
+    def evaluate_causal_model(self) -> float:
+        '''
+        Evaluate how well the estimated model of the agent fits the interventional data collected from the
+        actual environment.
+        :return:
+        '''
+        # estimate bayesian network from the structure of the model and observational data
+        bn = BayesianNetwork(self.causal_model)
+        bn.fit_node_states_and_cpds(self.collected_data['(None, None)'].replace([True, False], [1, 0]))
+        ie = InferenceEngine(bn)
+        var_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
+
+        losses = []
+        for pair in var_pairs:
+            for val in [0, 1]:  # TODO: generalize this to the actual domain of the variables (maybe through bn.Node_states)
+                try:
+                    ie.do_intervention(pair[0], val)
+                    predicted_dist = pd.Series(ie.query()[pair[1]])
+                    ie.reset_do(pair[0])
+    
+                    est_true_distribution = self.get_est_postint_distrib(pair[1], (int(pair[0][-1]), bool(val)))  # beware this awful hack for the var index
+                    losses.append((self._get_expected_value(predicted_dist)
+                                   - self._get_expected_value(est_true_distribution))**2)
+                except ValueError as e:
+                    print(pair, e)
+                except IndexError as i:
+                    print('Some weird stuff happening while quering', pair, '\n', i)
+                finally:
+                    ie.reset_do(pair[0])
+
+        return sum(losses)/len(losses)
+
+
+def get_switchboard_causal_graph() -> StructureModel:
+    model = StructureModel()
+    [model.add_node(name) for name in ['x'+str(i) for i in range(5)]]
+    model.add_edge('x0', 'x1')
+    model.add_edge('x2', 'x1')
+    model.add_edge('x2', 'x3')
+    model.add_edge('x4', 'x0')
+    model.add_edge('x4', 'x1')
+    model.add_edge('x4', 'x2')
+    return model
+
+
+def get_wrong_switchboard_causal_graph() -> StructureModel:
+    model = StructureModel()
+    [model.add_node(name) for name in ['x'+str(i) for i in range(5)]]
+    model.add_edge('x1', 'x0')
+    model.add_edge('x1', 'x2')
+    model.add_edge('x1', 'x4')
+    model.add_edge('x3', 'x2')
+    model.add_edge('x0', 'x4')
+    model.add_edge('x2', 'x4')
+    return model

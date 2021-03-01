@@ -3,7 +3,7 @@ from typing import List, Callable, Tuple, NoReturn
 from gym import Env
 from gym.spaces import Discrete
 import random
-from agents.SwitchboardAgent import SwitchboardAgent
+from agents.SwitchboardAgent import SwitchboardAgent, get_switchboard_causal_graph, get_wrong_switchboard_causal_graph
 import copy
 
 
@@ -26,7 +26,7 @@ class Switchboard(Env):
                     lambda: self.lights[2] or self.U[3],
                     lambda: self.U[4]]
 
-        self.agent = SwitchboardAgent(len(self.lights))
+        self.agent = SwitchboardAgent(len(self.lights), get_wrong_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
 
     def reset(self) -> NoReturn:
