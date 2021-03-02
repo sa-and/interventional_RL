@@ -1,4 +1,4 @@
-from typing import List, Callable, Tuple, NoReturn
+from typing import List, Callable, Tuple, NoReturn, Any
 
 from gym import Env
 from gym.spaces import Discrete
@@ -16,7 +16,6 @@ class Switchboard(Env):
 
     def __init__(self):
         super(Switchboard, self).__init__()
-        self.observation_space = Discrete(5)
         self.lights = [False]*5  # all lights are off
         self.U = random.choices([False, True], k=5)  # random context
 
@@ -28,20 +27,26 @@ class Switchboard(Env):
 
         self.agent = SwitchboardAgent(len(self.lights), get_wrong_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
+        self.observation_space = Discrete(5*2+5*(5-1)/2)
 
     def reset(self) -> NoReturn:
         pass
 
-    def step(self, action: int) -> Tuple[List[bool], float, bool, dict]:
-        self.agent.current_action = self.agent.actions[action]
+    def step(self, action: int) -> Tuple[List[Any], float, bool, dict]:
+        self.current_action = self.agent.actions[action]
 
         # get a random instantiation of the light. Simulation the unobserved (natural) change of the environment
         self.U = random.choices([False, True], k=5)
-
-        # apply intervention to the SCM
         interv_scm = copy.deepcopy(self.SCM)
-        if self.agent.current_action != (None, None):
-            interv_scm[self.agent.current_action[0]] = lambda: self.agent.current_action[1]
+
+        # apply action
+        if self.current_action[0] == 0:  # intervention action
+            interv_scm[self.current_action[1]] = lambda: self.current_action[2]
+            action_successful = True
+        elif self.current_action[0] == 1:
+            action_successful = self.agent.update_model(self.current_action)
+        elif self.current_action[0] == None:
+            action_successful = True
 
         # apply functions of SCM until no changes are done anymore
         while True:
@@ -49,9 +54,22 @@ class Switchboard(Env):
             self.lights = [interv_scm[i]() for i in range(5)]
             if old_lights == self.lights:
                 break
-        self.agent.store_observation(self.lights)
+        self.agent.store_observation(self.lights, self.current_action)
 
-        self.reset()
+        # determine state after action
+        intervention_one_hot = [1 if self.current_action[1] == i else 0 for i in range(len(self.lights))]
+        graph_state = self.agent.get_graph_state()
+        state = [int(l) for l in self.lights]  # convert bool to int
+        state.extend(intervention_one_hot)
+        state.extend(graph_state)
+
+        # let the episode end when the causal model is altered
+        if self.current_action[0] == 1:
+            done = True
+        else:
+            done = False
+
+        return state, 0.0, done, {}
 
     def render(self, mode: str = 'human') -> NoReturn:
         if mode == 'human':
@@ -61,7 +79,7 @@ class Switchboard(Env):
                     out += '|'
                 else:
                     out += 'O'
-                if self.agent.current_action[0] == i:
+                if self.current_action[1] == i:
                     out += '*'
                 out += '\t'
             print(out)

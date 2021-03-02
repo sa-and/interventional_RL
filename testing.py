@@ -2,11 +2,11 @@ from environments.Switchboard import Switchboard
 
 swtchbrd = Switchboard()
 #pure observation phase
-for i in range(1000):
-    swtchbrd.step(-1)
-    swtchbrd.render()
+# for i in range(500):
+#     swtchbrd.step(-1)
+#     swtchbrd.render()
 
-for i in range(5000):
+for i in range(1000):
     rnd_action = swtchbrd.action_space.sample()
     swtchbrd.step(rnd_action)
     swtchbrd.render()

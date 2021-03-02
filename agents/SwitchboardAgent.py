@@ -1,4 +1,4 @@
-from typing import Tuple, List, Optional, NoReturn
+from typing import Tuple, List, Optional, NoReturn, Union
 from causalnex.structure import StructureModel
 from causalnex.network import BayesianNetwork
 from causalnex.inference import InferenceEngine
@@ -13,17 +13,24 @@ class SwitchboardAgent:
     collected_data: dict
     current_mode: str
     causal_model: StructureModel
-    action = Tuple[Optional[int], Optional[bool]]
+    action = Tuple[Optional[int], Optional[Union[int, Tuple[str, str]]], Optional[Union[bool, int]]]
+    intv_action = Tuple[Optional[int], Optional[bool]]
     actions: List[action]
-    current_action: action
 
     def __init__(self, n_switches: int, causal_graph: StructureModel = None):
-        # create a dictonary of actions that can be performed on the switchboard
-        self.actions = [(i, True) for i in range(n_switches)]
-        self.actions.extend([(i, False) for i in range(n_switches)])
-        self.actions.append((None, None))
-        self.current_action = (None, None)
         self.var_names = ['x'+str(i) for i in range(n_switches)]
+
+        # create a list of actions that can be performed on the switchboard
+        # actions for interventions represented as (0, variable, value)
+        self.actions = [(0, i, True) for i in range(n_switches)]
+        self.actions.extend([(0, i, False) for i in range(n_switches)])
+        # actions for graph manipulation represented as (1, edge, operation)
+        # where operation can be one of: delete = 0, add = 1, reverse = 2
+        edges = [e for e in combinations(self.var_names, 2)]
+        for i in range(3):
+            extensions = [(1, edge, i) for edge in edges]
+            self.actions.extend([(1, edge, i) for edge in edges])
+        self.actions.append((None, None, None))
 
         # initialize causal model
         if causal_graph:
@@ -34,20 +41,25 @@ class SwitchboardAgent:
             self.causal_model.add_edges_from([(v[0], v[1]) for v in combinations(self.var_names, 2)])# TODO: needs sensible init instead?
 
         # initialize the storages for observational and interventional data. (None, None) is the purely observational data
-        self.collected_data = {str(action): pd.DataFrame(columns=self.var_names) for action in self.actions}
-    
-    def store_observation(self, obs: List[bool]):
+        self.collected_data = {str((action[1], action[2])): pd.DataFrame(columns=self.var_names)
+                               for action in self.actions if action[0] != 1}
+
+    def store_observation(self, obs: List[bool], current_action: action):
+        if current_action[0] == 1 or current_action[0] == None:  # no itervention
+            intervention = (None, None)
+        else:
+            intervention = (current_action[1], current_action[2])
         # put the observation in the right dataframe
         obs_dict = {self.var_names[i]: obs[i] for i in range(len(self.var_names))}
-        self.collected_data[str(self.current_action)] = self.collected_data[str(self.current_action)].append(obs_dict, ignore_index=True)
+        self.collected_data[str(intervention)] = self.collected_data[str(intervention)].append(obs_dict, ignore_index=True)
 
-    def get_est_postint_distrib(self, query: str, do: action) -> pd.Series:
+    def get_est_postint_distrib(self, query: str, do: intv_action) -> pd.Series:
         '''Computes and returns P(Query | do(action))'''
         query_dataframe = self.collected_data[str(do)]
         query_dataframe = query_dataframe.groupby(query).size()/len(query_dataframe)
         return query_dataframe.rename('P('+query+'|do'+str(do)+')')
 
-    def get_est_avg_causal_effect(self, query: str, action1: action, action2: action) -> float:
+    def get_est_avg_causal_effect(self, query: str, action1: intv_action, action2: intv_action) -> float:
         assert action1[0] == action2[0], 'effect can only be measured on the same intervention variable'
 
         exp_val1 = self._get_expected_value(self.get_est_postint_distrib(query, action1))
@@ -91,7 +103,7 @@ class SwitchboardAgent:
                     ie.do_intervention(pair[0], val)
                     predicted_dist = pd.Series(ie.query()[pair[1]])
                     ie.reset_do(pair[0])
-    
+
                     est_true_distribution = self.get_est_postint_distrib(pair[1], (int(pair[0][-1]), bool(val)))  # beware this awful hack for the var index
                     losses.append((self._get_expected_value(predicted_dist)
                                    - self._get_expected_value(est_true_distribution))**2)
@@ -103,6 +115,58 @@ class SwitchboardAgent:
                     ie.reset_do(pair[0])
 
         return sum(losses)/len(losses)
+
+    def update_model(self, action: action) -> bool:
+        '''Updates model according to action and returns the success of the operation'''
+        assert action[0] == 1, "Action is no model manipulation."
+        edge = action[1]
+        manipulation = action[2]
+
+        if manipulation == 0:  # remove edge if exists
+            if self.causal_model.has_edge(edge[0], edge[1]):
+                self.causal_model.remove_edge(edge[0], edge[1])
+            elif self.causal_model.has_edge(edge[1], edge[0]):
+                self.causal_model.remove_edge(edge[1], edge[0])
+            else:
+                return False
+
+        elif manipulation == 1:  # add edge
+            self.causal_model.add_edge(edge[0], edge[1])
+
+        elif manipulation == 2:  # reverse edge
+            if self.causal_model.has_edge(edge[0], edge[1]):
+                self.causal_model.remove_edge(edge[0], edge[1])
+                self.causal_model.add_edge(edge[1], edge[0])
+            elif self.causal_model.has_edge(edge[1], edge[0]):
+                self.causal_model.remove_edge(edge[1], edge[0])
+                self.causal_model.add_edge(edge[0], edge[1])
+            else:
+                return False
+
+        return True
+
+    def get_graph_state(self) -> List[float]:
+        '''
+        Get a list of values that represents the state of an edge in the causal graph for each possible graph.
+        The edges are ordered in lexographical order.
+
+        Example:
+        In a 3 node graph there are the potential edges: 0-1, 0-2, 1-2. The list [0, 0.5, 1] represents the
+        graph 0x1, 0->2, 1<-2, where x means that there is no edge.
+
+        :return: state of the graph
+        '''
+        graph_state = []
+        possible_edges = [e for e in combinations(self.var_names, 2)]
+        for e in possible_edges:
+            if self.causal_model.has_edge(e[0], e[1]):
+                graph_state.append(0.5)
+            elif self.causal_model.has_edge(e[1], e[0]):
+                graph_state.append(1.0)
+            else:
+                graph_state.append(0.0)
+        return graph_state
+
 
 
 def get_switchboard_causal_graph() -> StructureModel:
