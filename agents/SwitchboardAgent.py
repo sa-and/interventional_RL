@@ -90,6 +90,8 @@ class SwitchboardAgent:
         actual environment.
         :return:
         '''
+        if len(self.collected_data['(None, None)']) < 100:  # minimal amout of observations for evaluation
+            return -2
         # estimate bayesian network from the structure of the model and observational data
         bn = BayesianNetwork(self.causal_model)
         bn.fit_node_states_and_cpds(self.collected_data['(None, None)'].replace([True, False], [1, 0]))
@@ -105,42 +107,67 @@ class SwitchboardAgent:
                     ie.reset_do(pair[0])
 
                     est_true_distribution = self.get_est_postint_distrib(pair[1], (int(pair[0][-1]), bool(val)))  # beware this awful hack for the var index
-                    losses.append((self._get_expected_value(predicted_dist)
-                                   - self._get_expected_value(est_true_distribution))**2)
+                    if len(est_true_distribution) > 4:  # minimal size for interventional distributions
+                        losses.append((self._get_expected_value(predicted_dist)
+                                       - self._get_expected_value(est_true_distribution))**2)
                 except ValueError as e:
-                    print(pair, e)
+                    # print(pair, e)
+                    pass
                 except IndexError as i:
-                    print('Some weird stuff happening while quering', pair, '\n', i)
+                    # print('Some weird stuff happening while quering', pair, '\n', i)
+                    pass
                 finally:
                     ie.reset_do(pair[0])
 
-        return sum(losses)/len(losses)
+        if len(losses) == 0:  # all interventional distributions were too small
+            return -2
+        else:
+            return sum(losses)/len(losses)
 
     def update_model(self, action: action) -> bool:
         '''Updates model according to action and returns the success of the operation'''
-        assert action[0] == 1, "Action is no model manipulation."
+        assert action[0] == 1, "Action is not a b model manipulation."
         edge = action[1]
         manipulation = action[2]
+
+        self.display_causal_model()
 
         if manipulation == 0:  # remove edge if exists
             if self.causal_model.has_edge(edge[0], edge[1]):
                 self.causal_model.remove_edge(edge[0], edge[1])
+                removed_edge = (edge[0], edge[1])
             elif self.causal_model.has_edge(edge[1], edge[0]):
                 self.causal_model.remove_edge(edge[1], edge[0])
+                removed_edge = (edge[1], edge[0])
             else:
+                return False
+
+            if nx.number_weakly_connected_components(self.causal_model) > 1:  # disconnected graph
+                self.causal_model.add_edge(removed_edge[0], removed_edge[1])
                 return False
 
         elif manipulation == 1:  # add edge
             self.causal_model.add_edge(edge[0], edge[1])
 
+            if not nx.is_directed_acyclic_graph(self.causal_model):  # check if became cyclic
+                self.causal_model.remove_edge(edge[0], edge[1])
+                return False
+
         elif manipulation == 2:  # reverse edge
             if self.causal_model.has_edge(edge[0], edge[1]):
                 self.causal_model.remove_edge(edge[0], edge[1])
                 self.causal_model.add_edge(edge[1], edge[0])
+                added_edge = (edge[1], edge[0])
             elif self.causal_model.has_edge(edge[1], edge[0]):
                 self.causal_model.remove_edge(edge[1], edge[0])
                 self.causal_model.add_edge(edge[0], edge[1])
+                added_edge = edge
             else:
+                return False
+
+            if not nx.is_directed_acyclic_graph(self.causal_model):  # check if became cyclic
+                self.causal_model.remove_edge(added_edge[0], added_edge[1])
+                self.causal_model.add_edge(added_edge[1], added_edge[0])
                 return False
 
         return True

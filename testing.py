@@ -2,13 +2,14 @@ from environments.Switchboard import Switchboard
 
 swtchbrd = Switchboard()
 #pure observation phase
-# for i in range(500):
-#     swtchbrd.step(-1)
-#     swtchbrd.render()
+for i in range(500):
+    swtchbrd.step(-1)
+    swtchbrd.render()
 
 for i in range(1000):
     rnd_action = swtchbrd.action_space.sample()
     swtchbrd.step(rnd_action)
+    print(swtchbrd.agent.evaluate_causal_model())
     swtchbrd.render()
 # print(swtchbrd.agent.get_est_postint_distrib('x0', (2, True)))
 # print()

@@ -28,6 +28,7 @@ class Switchboard(Env):
         self.agent = SwitchboardAgent(len(self.lights), get_wrong_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
         self.observation_space = Discrete(5*2+5*(5-1)/2)
+        self.latest_evaluation = self.agent.evaluate_causal_model()
 
     def reset(self) -> NoReturn:
         pass
@@ -82,4 +83,4 @@ class Switchboard(Env):
                 if self.current_action[1] == i:
                     out += '*'
                 out += '\t'
-            print(out)
+            print(out + str(self.current_action))
