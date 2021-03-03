@@ -101,36 +101,30 @@ class SwitchboardAgent:
         losses = []
         for pair in var_pairs:
             for val in [0, 1]:  # TODO: generalize this to the actual domain of the variables (maybe through bn.Node_states)
-                try:
+                did = False
+                if self.is_legal_intervention(pair[0]):
                     ie.do_intervention(pair[0], val)
+                    did = True
                     predicted_dist = pd.Series(ie.query()[pair[1]])
-                    ie.reset_do(pair[0])
-
                     est_true_distribution = self.get_est_postint_distrib(pair[1], (int(pair[0][-1]), bool(val)))  # beware this awful hack for the var index
-                    if len(est_true_distribution) > 4:  # minimal size for interventional distributions
-                        losses.append((self._get_expected_value(predicted_dist)
-                                       - self._get_expected_value(est_true_distribution))**2)
-                except ValueError as e:
-                    # print(pair, e)
-                    pass
-                except IndexError as i:
-                    # print('Some weird stuff happening while quering', pair, '\n', i)
-                    pass
-                finally:
-                    ie.reset_do(pair[0])
+                    if len(self.collected_data[str((int(pair[0][-1]), bool(val)))]) > 4:  # minimal size for interventional distributions
+                        expvalpred = self._get_expected_value(predicted_dist)
+                        expvaltrue = self._get_expected_value(est_true_distribution)
+                        losses.append((expvalpred-expvaltrue)**2)
+
+                    if did:
+                        ie.reset_do(pair[0])
 
         if len(losses) == 0:  # all interventional distributions were too small
             return -2
         else:
-            return sum(losses)/len(losses)
+            return -sum(losses)/len(losses)
 
     def update_model(self, action: action) -> bool:
         '''Updates model according to action and returns the success of the operation'''
         assert action[0] == 1, "Action is not a b model manipulation."
         edge = action[1]
         manipulation = action[2]
-
-        self.display_causal_model()
 
         if manipulation == 0:  # remove edge if exists
             if self.causal_model.has_edge(edge[0], edge[1]):
@@ -194,6 +188,20 @@ class SwitchboardAgent:
                 graph_state.append(0.0)
         return graph_state
 
+    def is_legal_intervention(self, interv_var: str) -> bool:
+        """
+        Checks if performing an intervention disconnects the graph. If it does, it is not a legal intervention
+        for the causalnex library.
+        :param interv_var: variable to intervene on
+        :return: legal
+        """
+        model = self.causal_model.copy()
+        nodes = nx.nodes(model)
+        for n in nodes:
+            if model.has_edge(n, interv_var):
+                model.remove_edge(n, interv_var)
+        is_connected = nx.number_weakly_connected_components(model) <= 1
+        return is_connected
 
 
 def get_switchboard_causal_graph() -> StructureModel:
