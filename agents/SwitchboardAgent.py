@@ -97,12 +97,13 @@ class SwitchboardAgent:
         bn.fit_node_states_and_cpds(self.collected_data['(None, None)'].replace([True, False], [1, 0]))
         ie = InferenceEngine(bn)
         var_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
+        var_pairs = [pair for pair in var_pairs if self.is_legal_intervention(pair[0])]  # only legal pairs
 
         losses = []
         for pair in var_pairs:
             for val in [0, 1]:  # TODO: generalize this to the actual domain of the variables (maybe through bn.Node_states)
-                did = False
-                if self.is_legal_intervention(pair[0]):
+                did = False  # TODO: move this right after the start of outer loop or filter before loop
+                try:
                     ie.do_intervention(pair[0], val)
                     did = True
                     predicted_dist = pd.Series(ie.query()[pair[1]])
@@ -112,8 +113,11 @@ class SwitchboardAgent:
                         expvaltrue = self._get_expected_value(est_true_distribution)
                         losses.append((expvalpred-expvaltrue)**2)
 
-                    if did:
-                        ie.reset_do(pair[0])
+                except ValueError as e:
+                    print(e)
+
+                if did:
+                    ie.reset_do(pair[0])
 
         if len(losses) == 0:  # all interventional distributions were too small
             return -2

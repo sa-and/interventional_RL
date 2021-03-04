@@ -11,20 +11,24 @@ import numpy as np
 class Switchboard(Env):
     Agent: SwitchboardAgent
     Function = Callable[[], bool]
-    SCM: List[Function]
     U: List[bool]
     Lights: List[bool]
 
     def __init__(self):
         super(Switchboard, self).__init__()
-        self.lights = [False]*5  # all lights are off
-        self.U = random.choices([False, True], k=5)  # random context
+        # initialize causal model
+        self.SCM = StructuralCausalModel()
+        self.SCM.add_exogenous_vars([('U' + str(i), True, random.choice, {'seq': [True, False]}) for i in range(5)])
+        self.SCM.add_endogenous_vars(
+            [
+                ('X0', False, lambda x4, u0: x4 or u0, {'x4': 'X4', 'u0': 'U0'}),
+                ('X1', False, lambda x0, x2, x4, u1: x0 or x2 or x4 or u1, {'x0': 'X0', 'x2': 'X2', 'x4': 'X4', 'u1': 'U1'}),
+                ('X2', False, lambda x4, u2: x4 or u2, {'x4': 'X4', 'u2': 'U2'}),
+                ('X3', False, lambda x2, u3: x2 or u3, {'x2': 'X2', 'u3': 'U3'}),
+                ('X4', False, lambda u4: u4, {'u4': 'U4'})
+            ])
 
-        self.SCM = [lambda: self.lights[4] or self.U[0],
-                    lambda: self.lights[0] or self.lights[2] or self.lights[4] or self.U[1],
-                    lambda: self.lights[4] or self.U[2],
-                    lambda: self.lights[2] or self.U[3],
-                    lambda: self.U[4]]
+        self.lights = [False]*5  # all lights are off
 
         self.agent = SwitchboardAgent(len(self.lights), get_wrong_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
@@ -33,31 +37,26 @@ class Switchboard(Env):
         self.current_action = (None, None, None)
         self.rewards = []
 
-    def reset(self) -> List[float]:
+    def reset(self) -> np.ndarray:
         return self.get_obs_vector()
 
-    def step(self, action: int) -> Tuple[List[Any], float, bool, dict]:
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
         self.current_action = self.agent.actions[action]
 
-        # get a random instantiation of the light. Simulation the unobserved (natural) change of the environment
-        self.U = random.choices([False, True], k=5)
         interv_scm = copy.deepcopy(self.SCM)
-
         # apply action
+        action_successful = False
         if self.current_action[0] == 0:  # intervention action
-            interv_scm[self.current_action[1]] = lambda: self.current_action[2]
+            interv_scm.do_interventions([('X'+str(self.current_action[1]), lambda: self.current_action[2])])
             action_successful = True
         elif self.current_action[0] == 1:
             action_successful = self.agent.update_model(self.current_action)
         elif self.current_action[0] == None:
             action_successful = True
 
-        # apply functions of SCM until no changes are done anymore
-        while True:
-            old_lights = self.lights
-            self.lights = [interv_scm[i]() for i in range(5)]
-            if old_lights == self.lights:
-                break
+        # determine the states of the lights according to the causal structure
+        self.lights = interv_scm.get_next_instantiation()[0]
+
         self.agent.store_observation(self.lights, self.current_action)
 
         # determine state after action
@@ -94,7 +93,7 @@ class Switchboard(Env):
 
         return state, reward, done, {}
 
-    def get_obs_vector(self) -> List[float]:
+    def get_obs_vector(self) -> np.ndarray:
         intervention_one_hot = [1.0 if self.current_action[1] == i else 0.0 for i in range(len(self.lights))]
         graph_state = self.agent.get_graph_state()
         state = [float(l) for l in self.lights]  # convert bool to int
@@ -149,13 +148,13 @@ class StructuralCausalModel:
 
     def remove_var(self, name: str):
         if name in self.endogenous_vars.keys():
-            assert name in self.endogenous_vars, 'Variable not in list of edogenous vars'
+            assert name in self.endogenous_vars, 'Variable not in list of endogenous vars'
 
             del self.endogenous_vars[name]
             del self.functions[name]
 
         else:
-            assert name in self.exogenous_vars, 'Variable not in list of edogenous vars'
+            assert name in self.exogenous_vars, 'Variable not in list of exogenous vars'
 
             del self.exogenous_vars[name]
             del self.exogenous_distributions[name]
@@ -192,18 +191,15 @@ class StructuralCausalModel:
 
         return list(self.endogenous_vars.values()), list(self.exogenous_vars.values())
 
-    def get_intervened_scm(self, interventions: List[Tuple[str, Callable]]):
+    def do_interventions(self, interventions: List[Tuple[str, Callable]]):
         """
-        Creates an SCM in which all nodes in interventions (on endogenous variables)
-        have been set to the function provided. The provided functions are assumed to have no parameters
+        Replaces the functions of the SCM with the given interventions
 
         :param interventions: List of tuples
-        :return: StructuralCausalModel
         """
-        interv_scm = copy.deepcopy(self)
+        random.seed()
         for interv in interventions:
-            interv_scm.endogenous_vars[interv[0]] = interv[1]()  # this is probably redundat with the next line
-            interv_scm.functions[interv[0]] = (interv[1], {})
+            self.endogenous_vars[interv[0]] = interv[1]()  # this is probably redundat with the next line
+            self.functions[interv[0]] = (interv[1], {})
 
-        return interv_scm
 
