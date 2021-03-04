@@ -141,7 +141,10 @@ class SwitchboardAgent:
                 return False
 
         elif manipulation == 1:  # add edge
-            self.causal_model.add_edge(edge[0], edge[1])
+            if not self.causal_model.has_edge(edge[0], edge[1]):  # only add edge if not already there
+                self.causal_model.add_edge(edge[0], edge[1])
+            else:
+                return False
 
             if not nx.is_directed_acyclic_graph(self.causal_model):  # check if became cyclic
                 self.causal_model.remove_edge(edge[0], edge[1])

@@ -31,6 +31,7 @@ class Switchboard(Env):
         self.observation_space = Box(0, 1, (int(5*2+5*(5-1)/2),))
         self.latest_evaluation = self.agent.evaluate_causal_model()
         self.current_action = (None, None, None)
+        self.rewards = []
 
     def reset(self) -> List[float]:
         return self.get_obs_vector()
@@ -84,7 +85,7 @@ class Switchboard(Env):
         #     reward = 1
         # elif not graph_improved:
         #     reward = -1
-
+        self.rewards.append(reward)
         print(self.current_action, '\treward', reward)
 
         # # show changed network
@@ -113,3 +114,96 @@ class Switchboard(Env):
                     out += '*'
                 out += '\t'
             print(out)
+
+
+class StructuralCausalModel:
+    def __init__(self):
+        self.endogenous_vars = {}
+        self.exogenous_vars = {}
+        self.functions = {}
+        self.exogenous_distributions = {}
+
+    def add_endogenous_var(self, name: str, value: Any, function: Callable, param_varnames: dict):
+        # ensure unique names
+        assert name not in self.exogenous_vars.keys(), 'Variable already exists'
+        assert name not in self.endogenous_vars.keys(), 'Variable already exists in endogenous vars'
+
+        self.endogenous_vars[name] = value
+        self.functions[name] = (function, param_varnames)
+
+    def add_endogenous_vars(self, vars: List[Tuple[str, Any, Callable, dict]]):
+        for v in vars:
+            self.add_endogenous_var(v[0], v[1], v[2], v[3])
+
+    def add_exogenous_var(self, name: str, value: Any, distribution: Callable, distribution_kwargs: dict):
+        # ensure unique names
+        assert name not in self.exogenous_vars.keys(), 'Variable already exists'
+        assert name not in self.endogenous_vars.keys(), 'Variable already exists in endogenous vars'
+
+        self.exogenous_vars[name] = value
+        self.exogenous_distributions[name] = (distribution, distribution_kwargs)
+
+    def add_exogenous_vars(self, vars: List[Tuple[str, Any, Callable, dict]]):
+        for v in vars:
+            self.add_exogenous_var(v[0], v[1], v[2], v[3])
+
+    def remove_var(self, name: str):
+        if name in self.endogenous_vars.keys():
+            assert name in self.endogenous_vars, 'Variable not in list of edogenous vars'
+
+            del self.endogenous_vars[name]
+            del self.functions[name]
+
+        else:
+            assert name in self.exogenous_vars, 'Variable not in list of edogenous vars'
+
+            del self.exogenous_vars[name]
+            del self.exogenous_distributions[name]
+
+    def get_next_instantiation(self) -> Tuple[List, List]:
+        """
+        Returns a new instantiation of variables consistent with the causal structure and for a sample from the
+        exogenous distribution
+        :return: Instantiation of endogenous and exogenous variables
+        """
+        # update exogenous vars
+        for key in self.exogenous_vars:
+            dist = self.exogenous_distributions[key]
+            self.exogenous_vars[key] = dist[0](**dist[1])
+
+        # update endogenous vars until converge
+        while True:
+            old_obs = copy.copy(self.endogenous_vars)
+
+            for key in old_obs:
+                # get the values for the parameters needed in the functions
+                params = {}
+                for n in self.functions[key][1]:  # parameters of functions
+                    if self.functions[key][1][n] in self.endogenous_vars.keys():
+                        params[n] = self.endogenous_vars[self.functions[key][1][n]]
+                    else:
+                        params[n] = self.exogenous_vars[self.functions[key][1][n]]
+
+                # Update variable according to its function and parameters
+                self.endogenous_vars[key] = self.functions[key][0](**params)
+
+            if old_obs == self.endogenous_vars:
+                break
+
+        return list(self.endogenous_vars.values()), list(self.exogenous_vars.values())
+
+    def get_intervened_scm(self, interventions: List[Tuple[str, Callable]]):
+        """
+        Creates an SCM in which all nodes in interventions (on endogenous variables)
+        have been set to the function provided. The provided functions are assumed to have no parameters
+
+        :param interventions: List of tuples
+        :return: StructuralCausalModel
+        """
+        interv_scm = copy.deepcopy(self)
+        for interv in interventions:
+            interv_scm.endogenous_vars[interv[0]] = interv[1]()  # this is probably redundat with the next line
+            interv_scm.functions[interv[0]] = (interv[1], {})
+
+        return interv_scm
+
