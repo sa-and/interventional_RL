@@ -3,13 +3,13 @@ from typing import List, Callable, Tuple, NoReturn, Any
 from gym import Env
 from gym.spaces import Discrete, Box
 import random
-from agents.SwitchboardAgent import SwitchboardAgent, get_switchboard_causal_graph, get_wrong_switchboard_causal_graph
+from Agents import SwitchboardAgentDQN, get_switchboard_causal_graph, get_wrong_switchboard_causal_graph
 import copy
 import numpy as np
 
 
 class Switchboard(Env):
-    Agent: SwitchboardAgent
+    Agent: SwitchboardAgentDQN
     Function = Callable[[], bool]
     U: List[bool]
     Lights: List[bool]
@@ -30,7 +30,7 @@ class Switchboard(Env):
 
         self.lights = [False]*5  # all lights are off
 
-        self.agent = SwitchboardAgent(len(self.lights), get_switchboard_causal_graph())
+        self.agent = SwitchboardAgentDQN(len(self.lights), get_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
         self.observation_space = Box(0, 1, (int((5*2)+5*(5-1)/2),))
         self.latest_evaluation = self.agent.evaluate_causal_model()
@@ -42,7 +42,6 @@ class Switchboard(Env):
         return self.get_obs_vector()
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
-        old_obs = self.get_obs_vector()
         self.current_action = self.agent.actions[action]
 
         interv_scm = copy.deepcopy(self.SCM)
@@ -52,14 +51,14 @@ class Switchboard(Env):
             interv_scm.do_interventions([('X'+str(self.current_action[1]), lambda: self.current_action[2])])
             action_successful = True
         elif self.current_action[0] == 1:
-            action_successful = self.agent.update_model(self.current_action)
+            action_successful = self.agent.update_model_per_action(self.current_action)
         elif self.current_action[0] == None:
             action_successful = True
 
         # determine the states of the lights according to the causal structure
         self.lights = interv_scm.get_next_instantiation()[0]
 
-        self.agent.store_observation(self.lights, self.current_action)
+        self.agent.store_observation_per_action(self.lights, self.current_action)
 
         # determine state after action
         state = self.get_obs_vector()
@@ -87,10 +86,6 @@ class Switchboard(Env):
         #     reward = -1
         self.rewards.append(reward)
         print(self.current_action, '\treward', reward)
-
-        # # show changed network
-        # if action_successful and self.current_action[0] == 1:
-        #     self.agent.display_causal_model()
 
         return state, reward, done, {}
 
