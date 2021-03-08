@@ -134,7 +134,7 @@ class SwitchboardAgent:
     def graph_is_learned(self) -> bool:
         eval = self.evaluate_causal_model()
         print(eval)
-        return eval > -0.005
+        return eval > -0.006
 
     def update_model(self, action: action) -> bool:
         '''Updates model according to action and returns the success of the operation'''

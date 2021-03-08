@@ -32,22 +32,17 @@ class Switchboard(Env):
 
         self.agent = SwitchboardAgent(len(self.lights), get_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
-        self.observation_space = Box(0, 1, (int((5*2)*3+5*(5-1)/2),))
+        self.observation_space = Box(0, 1, (int((5*2)+5*(5-1)/2),))
         self.latest_evaluation = self.agent.evaluate_causal_model()
         self.current_action = (None, None, None)
         self.rewards = []
 
-        self.old_old_state = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        self.old_state = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-
     def reset(self) -> np.ndarray:
-        #self.agent.random_reset_causal_model()
+        self.agent.random_reset_causal_model()
         return self.get_obs_vector()
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
         old_obs = self.get_obs_vector()
-        self.old_state = old_obs[:10]
-        self.old_old_state = old_obs[10:20]
         self.current_action = self.agent.actions[action]
 
         interv_scm = copy.deepcopy(self.SCM)
@@ -79,7 +74,7 @@ class Switchboard(Env):
         if not action_successful:  # illegal action was taken
             reward = -10
         elif done:  # the graph has been learned
-            reward = 1
+            reward = 5
             self.agent.display_causal_model()
             self.reset()
         else:  # intervention, non-intervention, graph-changing
@@ -104,8 +99,6 @@ class Switchboard(Env):
         graph_state = self.agent.get_graph_state()
         state = [float(l) for l in self.lights]  # convert bool to int
         state.extend(intervention_one_hot)
-        state.extend(self.old_state)
-        state.extend(self.old_old_state)
         state.extend(graph_state)
         return np.array(state)
 
