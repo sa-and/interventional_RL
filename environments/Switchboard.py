@@ -30,17 +30,24 @@ class Switchboard(Env):
 
         self.lights = [False]*5  # all lights are off
 
-        self.agent = SwitchboardAgent(len(self.lights), get_wrong_switchboard_causal_graph())
+        self.agent = SwitchboardAgent(len(self.lights), get_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
-        self.observation_space = Box(0, 1, (int(5*2+5*(5-1)/2),))
+        self.observation_space = Box(0, 1, (int((5*2)*3+5*(5-1)/2),))
         self.latest_evaluation = self.agent.evaluate_causal_model()
         self.current_action = (None, None, None)
         self.rewards = []
 
+        self.old_old_state = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        self.old_state = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
     def reset(self) -> np.ndarray:
+        #self.agent.random_reset_causal_model()
         return self.get_obs_vector()
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
+        old_obs = self.get_obs_vector()
+        self.old_state = old_obs[:10]
+        self.old_old_state = old_obs[10:20]
         self.current_action = self.agent.actions[action]
 
         interv_scm = copy.deepcopy(self.SCM)
@@ -62,22 +69,21 @@ class Switchboard(Env):
         # determine state after action
         state = self.get_obs_vector()
 
-        # let the episode end when the causal model is altered and evaluate new graph
-        if self.current_action[0] == 1:
-            new_eval = self.agent.evaluate_causal_model()
-            # graph_improved = new_eval >= self.latest_evaluation
-            self.latest_evaluation = new_eval
-            done = True
+        # let the episode end when the causal model is fully learned (loss reaching threshold of -0.006)
+        if self.current_action[0] == 1:  # only check if the model actually changed.
+            done = self.agent.graph_is_learned()
         else:
             done = False
 
         # compute reward
-        if not action_successful:
-            reward = -2
-        elif self.latest_evaluation == -2 and self.current_action[0] == 1:  # not enough data has been collected. Need intervention
-            reward = -2
-        else:
-            reward = self.latest_evaluation
+        if not action_successful:  # illegal action was taken
+            reward = -10
+        elif done:  # the graph has been learned
+            reward = 1
+            self.agent.display_causal_model()
+            self.reset()
+        else:  # intervention, non-intervention, graph-changing
+            reward = 0
         # elif self.current_action[0] == 0 or self.current_action[0] == None:  # intervention
         #     reward = 0
         # elif graph_improved:
@@ -98,6 +104,8 @@ class Switchboard(Env):
         graph_state = self.agent.get_graph_state()
         state = [float(l) for l in self.lights]  # convert bool to int
         state.extend(intervention_one_hot)
+        state.extend(self.old_state)
+        state.extend(self.old_old_state)
         state.extend(graph_state)
         return np.array(state)
 
@@ -165,6 +173,7 @@ class StructuralCausalModel:
         exogenous distribution
         :return: Instantiation of endogenous and exogenous variables
         """
+        random.seed()
         # update exogenous vars
         for key in self.exogenous_vars:
             dist = self.exogenous_distributions[key]

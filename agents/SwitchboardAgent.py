@@ -7,6 +7,7 @@ import networkx as nx
 import pandas as pd
 from pandas import DataFrame
 from itertools import combinations, permutations
+import random
 
 
 class SwitchboardAgent:
@@ -38,11 +39,17 @@ class SwitchboardAgent:
         else:
             self.causal_model = StructureModel()
             [self.causal_model.add_node(name) for name in self.var_names]
-            self.causal_model.add_edges_from([(v[0], v[1]) for v in combinations(self.var_names, 2)])# TODO: needs sensible init instead?
+            self.random_reset_causal_model()
 
         # initialize the storages for observational and interventional data. (None, None) is the purely observational data
         self.collected_data = {str((action[1], action[2])): pd.DataFrame(columns=self.var_names)
                                for action in self.actions if action[0] != 1}
+
+    def random_reset_causal_model(self):
+        all_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
+        random.shuffle(all_pairs)
+        for p in all_pairs:
+            self.update_model((1, p, random.choice([0, 1, 2])))
 
     def store_observation(self, obs: List[bool], current_action: action):
         if current_action[0] == 1 or current_action[0] == None:  # no itervention
@@ -123,6 +130,11 @@ class SwitchboardAgent:
             return -2
         else:
             return -sum(losses)/len(losses)
+
+    def graph_is_learned(self) -> bool:
+        eval = self.evaluate_causal_model()
+        print(eval)
+        return eval > -0.005
 
     def update_model(self, action: action) -> bool:
         '''Updates model according to action and returns the success of the operation'''
