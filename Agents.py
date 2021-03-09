@@ -9,12 +9,15 @@ import pandas as pd
 from pandas import DataFrame
 from itertools import combinations, permutations
 import random
+from gym.spaces import Discrete, Box
 
 
 class CausalAgent(ABC):
     var_names: Union[int, List[str]]
     causal_model: StructureModel
     collected_data: dict
+    actions: List[Any]
+    state_repeats: int
 
     def __init__(self, vars: Union[int, List[str]], causal_graph: StructureModel = None):
         if type(vars) == int:
@@ -32,6 +35,11 @@ class CausalAgent(ABC):
 
         # initialize the storages for observational and interventional data.
         self.collected_data = {}
+
+        self.action_space = None
+        self.observation_space = None
+        self.actions = []
+        self.state_repeats = None
 
     def random_reset_causal_model(self):
         all_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
@@ -245,10 +253,10 @@ class CausalAgent(ABC):
 class SwitchboardAgentDQN(CausalAgent):
     current_mode: str
     action = Tuple[Optional[int], Optional[Union[int, Tuple[str, str]]], Optional[Union[bool, int]]]
-    intv_action = Tuple[Optional[int], Optional[bool]]
     actions: List[action]
+    state_repeats: int
 
-    def __init__(self, n_switches: int, causal_graph: StructureModel = None):
+    def __init__(self, n_switches: int, causal_graph: StructureModel = None, state_repeats: int = 1):
         super(SwitchboardAgentDQN, self).__init__(n_switches, causal_graph)
 
         # create a list of actions that can be performed on the switchboard
@@ -263,6 +271,10 @@ class SwitchboardAgentDQN(CausalAgent):
             self.actions.extend([(1, edge, i) for edge in edges])
         self.actions.append((None, None, None))
 
+        self.action_space = Discrete(len(self.actions))
+        self.state_repeats = state_repeats
+        self.observation_space = Box(0, 1, (state_repeats*(int((n_switches * 2) + n_switches * (n_switches - 1) / 2)),))
+
     def store_observation_per_action(self, obs: List[bool], current_action: action):
         if current_action[0] == 1 or current_action[0] == None:  # no itervention
             self.store_observation(obs, None, None)
@@ -276,6 +288,10 @@ class SwitchboardAgentDQN(CausalAgent):
         manipulation = action[2]
 
         return self.update_model(edge, manipulation)
+
+class SwitchboardAgentA2C(CausalAgent):
+    def __init__(self):
+        pass
 
 
 def get_switchboard_causal_graph() -> StructureModel:

@@ -1,20 +1,19 @@
 from typing import List, Callable, Tuple, NoReturn, Any
 
 from gym import Env
-from gym.spaces import Discrete, Box
 import random
-from Agents import SwitchboardAgentDQN, get_switchboard_causal_graph, get_wrong_switchboard_causal_graph
+from Agents import CausalAgent, SwitchboardAgentDQN, SwitchboardAgentA2C, get_switchboard_causal_graph, get_wrong_switchboard_causal_graph
 import copy
 import numpy as np
+import networkx as nx
 
 
 class Switchboard(Env):
     Agent: SwitchboardAgentDQN
     Function = Callable[[], bool]
-    U: List[bool]
     Lights: List[bool]
 
-    def __init__(self):
+    def __init__(self, agent: CausalAgent):
         super(Switchboard, self).__init__()
         # initialize causal model
         self.SCM = StructuralCausalModel()
@@ -30,14 +29,26 @@ class Switchboard(Env):
 
         self.lights = [False]*5  # all lights are off
 
-        self.agent = SwitchboardAgentDQN(len(self.lights), get_switchboard_causal_graph())
-        self.action_space = Discrete(len(self.agent.actions))
-        self.observation_space = Box(0, 1, (int((5*2)+5*(5-1)/2),))
+        assert type(agent) == SwitchboardAgentDQN or type(agent) == SwitchboardAgentA2C, \
+            'Wrong agent for this environment'
+
+        self.agent = agent
+        self.action_space = self.agent.action_space
         self.current_action = (None, None, None)
+        self.observation_space = self.agent.observation_space
+        self.old_obs = []
+        for i in range(self.agent.state_repeats):
+            self.old_obs.append([0.0 for i in range(int(self.observation_space.shape[0]/self.agent.state_repeats))])
+
         self.rewards = []
 
     def reset(self) -> np.ndarray:
         self.agent.random_reset_causal_model()
+        # reset observations
+        self.old_obs = []
+        for i in range(self.agent.state_repeats):
+            self.old_obs.append([0.0 for i in range(int(self.observation_space.shape[0] / self.agent.state_repeats))])
+
         return self.get_obs_vector()
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
@@ -60,17 +71,29 @@ class Switchboard(Env):
         self.agent.store_observation_per_action(self.lights, self.current_action)
 
         # determine state after action
-        state = self.get_obs_vector()
+        self.last_observation = self.get_obs_vector()
 
         # let the episode end when the causal model is fully learned (loss reaching threshold of -0.006)
         if self.current_action[0] == 1:  # only check if the model actually changed.
             done = self.agent.graph_is_learned()
+            almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+                                                    get_switchboard_causal_graph()) \
+                             == 2
+            very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+                                                    get_switchboard_causal_graph()) \
+                             == 1
         else:
             done = False
+            almost_learned = False
+            very_almost_learned = False
 
         # compute reward
         if not action_successful:  # illegal action was taken
-            reward = -10
+            reward = -1
+        elif almost_learned:
+            reward = 2
+        elif very_almost_learned:
+            reward = 3
         elif done:  # the graph has been learned
             reward = 5
             self.agent.display_causal_model()
@@ -81,15 +104,20 @@ class Switchboard(Env):
         self.rewards.append(reward)
         print(self.current_action, '\treward', reward)
 
-        return state, reward, done, {}
+        return self.last_observation, reward, done, {}
 
     def get_obs_vector(self) -> np.ndarray:
+        # push old observations
+        for i in range(1, len(self.old_obs)):
+            self.old_obs[i-1] = self.old_obs[i]
+            
         intervention_one_hot = [1.0 if self.current_action[1] == i else 0.0 for i in range(len(self.lights))]
         graph_state = self.agent.get_graph_state()
         state = [float(l) for l in self.lights]  # convert bool to int
         state.extend(intervention_one_hot)
         state.extend(graph_state)
-        return np.array(state)
+        self.old_obs[-1] = state
+        return np.array(self.old_obs).flatten()
 
     def render(self, mode: str = 'human') -> NoReturn:
         if mode == 'human':
