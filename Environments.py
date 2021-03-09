@@ -33,7 +33,6 @@ class Switchboard(Env):
         self.agent = SwitchboardAgentDQN(len(self.lights), get_switchboard_causal_graph())
         self.action_space = Discrete(len(self.agent.actions))
         self.observation_space = Box(0, 1, (int((5*2)+5*(5-1)/2),))
-        self.latest_evaluation = self.agent.evaluate_causal_model()
         self.current_action = (None, None, None)
         self.rewards = []
 
@@ -78,12 +77,7 @@ class Switchboard(Env):
             self.reset()
         else:  # intervention, non-intervention, graph-changing
             reward = 0
-        # elif self.current_action[0] == 0 or self.current_action[0] == None:  # intervention
-        #     reward = 0
-        # elif graph_improved:
-        #     reward = 1
-        # elif not graph_improved:
-        #     reward = -1
+
         self.rewards.append(reward)
         print(self.current_action, '\treward', reward)
 

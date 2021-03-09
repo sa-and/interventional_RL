@@ -128,7 +128,8 @@ class CausalAgent(ABC):
             key = '(' + intervened_var + ',' + str(val) + ')'
 
         # put the observation in the right dataframe
-        obs_dict = {self.var_names[i]: obs[i] for i in range(len(self.var_names))}
+        obs_dict = pd.DataFrame().append({self.var_names[i]: obs[i] for i in range(len(self.var_names))},
+                                         ignore_index=True)
 
         if key in self.collected_data:
             self.collected_data[key] = self.collected_data[key].append(obs_dict, ignore_index=True)
@@ -156,7 +157,7 @@ class CausalAgent(ABC):
         actual environment.
         :return:
         '''
-        if len(self.collected_data['(None, None)']) < 100:  # minimal amout of observations for evaluation
+        if '(None, None)' in self.collected_data and len(self.collected_data['(None, None)']) < 100:  # minimal amout of observations for evaluation
             return -2
         # estimate bayesian network from the structure of the model and observational data
         bn = BayesianNetwork(self.causal_model)
@@ -195,10 +196,13 @@ class CausalAgent(ABC):
         else:
             return -sum(losses)/len(losses)
 
-    def graph_is_learned(self, threshold) -> bool:
-        eval = self.evaluate_causal_model()
-        print(eval)
-        return eval > threshold
+    def graph_is_learned(self, threshold: float=None) -> bool:
+        # eval = self.evaluate_causal_model()
+        # print(eval)
+        # return eval > threshold
+        return nx.graph_edit_distance(self.causal_model,
+                                      get_switchboard_causal_graph()) \
+               == 0
 
     def get_graph_state(self) -> List[float]:
         '''
@@ -263,7 +267,7 @@ class SwitchboardAgentDQN(CausalAgent):
         if current_action[0] == 1 or current_action[0] == None:  # no itervention
             self.store_observation(obs, None, None)
         else:
-            self.store_observation(obs, current_action[1], current_action[2])
+            self.store_observation(obs, self.var_names[current_action[1]], current_action[2])
 
     def update_model_per_action(self, action: action) -> bool:
         '''Updates model according to action and returns the success of the operation'''

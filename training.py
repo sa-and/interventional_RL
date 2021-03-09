@@ -15,11 +15,11 @@ swtchbrd = venv.DummyVecEnv([create_switchboard])
 #check = check_env(swtchbrd)
 
 # data collection phase
-for i in range(10000):
+for i in range(1000):
     swtchbrd.envs[0].step(-1)
 
 data_actions = [i for i in range(10)]
-for i in range(5000):
+for i in range(500):
     a = random.sample(data_actions, k=1)[0]
     swtchbrd.envs[0].step(a)
 
@@ -29,6 +29,7 @@ model = A2C(MlpLstmPolicy,
             swtchbrd,
             learning_rate=0.001,
             policy_kwargs={'net_arch': [24,
+                                        30,
                                         'lstm',
                                         {'pi': [45],
                                          'vf': [10]}],
@@ -36,7 +37,7 @@ model = A2C(MlpLstmPolicy,
             epsilon=0.005)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
-model.learn(500000)
+model.learn(5000000)
 pred = model.predict([swtchbrd.envs[0].get_obs_vector()])
 print(model.predict([swtchbrd.envs[0].get_obs_vector()]))
 model.save('models/exp4')
