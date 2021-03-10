@@ -10,6 +10,7 @@ from pandas import DataFrame
 from itertools import combinations, permutations
 import random
 from gym.spaces import Discrete, Box
+import numpy as np
 
 
 class CausalAgent(ABC):
@@ -289,9 +290,48 @@ class SwitchboardAgentDQN(CausalAgent):
 
         return self.update_model(edge, manipulation)
 
+
 class SwitchboardAgentA2C(CausalAgent):
-    def __init__(self):
-        pass
+    action: Tuple[float, float, float, float, float, float]  # (action_type, inter_var, inter_val, edge_u, edge_v, mani)
+
+    def __init__(self, n_switches: int, causal_graph: StructureModel = None, state_repeats: int = 1):
+        super(SwitchboardAgentA2C, self).__init__(n_switches, causal_graph)
+
+        self.action_space = Box(low=np.array([-1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+                                high=np.array([1.0,
+                                      float(len(self.var_names)),
+                                      1.0,
+                                      float(len(self.var_names)),
+                                      float(len(self.var_names)),
+                                      2.0]),
+                                shape=(6,))
+        self.state_repeats = state_repeats
+        self.observation_space = Box(0, 1,
+                                     (state_repeats * (int((n_switches * 2) + n_switches * (n_switches - 1) / 2)),))
+
+    def store_observation_per_action(self, obs: List[Any], action: Any):
+        action = [int(round(val)) for val in action]  # discretize action
+        if action[0] == -1 or action[0] == 1:  # no itervention
+            self.store_observation(obs, None, None)
+        else:
+            self.store_observation(obs, self.var_names[action[1]], bool(action[2]))
+
+    def update_model_per_action(self, action: Any):
+        action = [int(round(val)) for val in action]  # discretize action
+        if action[3] == action[4]:  # edge on the same node
+            return False
+        return self.update_model((self.var_names[action[3]], self.var_names[action[4]]), action[5])
+    #
+    # def discretize_action(self, action):
+    #     dist_action = []
+    #     if action[0] <= -0.5:  # None action
+    #         dist_action = None
+    #     elif action[0] > -0.5 and action[0] < 0.5:  # intervention action
+    #         dist_action.append(0)
+    #         dist_action.append()
+    #     elif action[0] >= 0.5:  # manipulation action
+    #         pass
+        
 
 
 def get_switchboard_causal_graph() -> StructureModel:

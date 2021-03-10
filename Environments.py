@@ -34,8 +34,12 @@ class Switchboard(Env):
 
         self.agent = agent
         self.action_space = self.agent.action_space
-        self.current_action = (None, None, None)
+        if type(self.agent) == SwitchboardAgentDQN:
+            self.current_action = (None, None, None)
+        elif type(self.agent) == SwitchboardAgentA2C:
+            self.current_action = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.observation_space = self.agent.observation_space
+        self.prev_action = None
         self.old_obs = []
         for i in range(self.agent.state_repeats):
             self.old_obs.append([0.0 for i in range(int(self.observation_space.shape[0]/self.agent.state_repeats))])
@@ -52,7 +56,21 @@ class Switchboard(Env):
         return self.get_obs_vector()
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
-        self.current_action = self.agent.actions[action]
+        if type(self.agent) == SwitchboardAgentDQN:
+            self.current_action = self.agent.actions[action]
+        elif type(self.agent) == SwitchboardAgentA2C:
+            self.current_action = [round(a) for a in action]
+            # clip values
+            if self.current_action[1] < 0:
+                self.current_action[1] = 0
+            elif self.current_action[1] > len(self.agent.var_names):
+                self.current_action[1] = len(self.agent.var_names) - 1
+            if self.current_action[3] > len(self.agent.var_names):
+                self.current_action[3] = len(self.agent.var_names) - 1
+            if self.current_action[4] > len(self.agent.var_names):
+                self.current_action[4] = len(self.agent.var_names) - 1
+            if self.current_action[5] > 2:
+                self.current_action[5] = 2
 
         interv_scm = copy.deepcopy(self.SCM)
         # apply action
@@ -60,9 +78,16 @@ class Switchboard(Env):
         if self.current_action[0] == 0:  # intervention action
             interv_scm.do_interventions([('X'+str(self.current_action[1]), lambda: self.current_action[2])])
             action_successful = True
+        elif self.current_action[0] == 1 and self.current_action[-1] == 2 and self.prev_action[-1] == 2:  # don't allow reversal of edge that has just been reversed
+            if type(self.agent) == SwitchboardAgentDQN and self.current_action[1] == self.prev_action[1]:
+                action_successful = False
+            elif type(self.agent) == SwitchboardAgentA2C and\
+                    self.current_action[3] == self.prev_action[3] and\
+                    self.current_action[4] == self.prev_action[4]:
+                action_successful = False
         elif self.current_action[0] == 1:
             action_successful = self.agent.update_model_per_action(self.current_action)
-        elif self.current_action[0] == None:
+        elif self.current_action[0] == None or self.current_action[0] == -1:
             action_successful = True
 
         # determine the states of the lights according to the causal structure
@@ -95,14 +120,18 @@ class Switchboard(Env):
         elif very_almost_learned:
             reward = 3
         elif done:  # the graph has been learned
-            reward = 5
+            reward = 30
             self.agent.display_causal_model()
             self.reset()
         else:  # intervention, non-intervention, graph-changing
             reward = 0
 
+        self.prev_action = self.current_action
         self.rewards.append(reward)
-        print(self.current_action, '\treward', reward)
+        if type(self.agent) == SwitchboardAgentA2C:
+            print([round(a) for a in self.current_action], '\treward', reward)
+        else:
+            print(self.current_action, '\treward', reward)
 
         return self.last_observation, reward, done, {}
 
