@@ -1,42 +1,21 @@
-from environments.Switchboard import Switchboard, StructuralCausalModel
-from stable_baselines3.dqn import DQN
-from stable_baselines3.dqn.policies import MlpPolicy
-from stable_baselines3.common.env_checker import check_env
+from Environments import Switchboard, StructuralCausalModel
+from stable_baselines.a2c import A2C
+from stable_baselines.common.policies import MlpLstmPolicy
+from stable_baselines.common.env_checker import check_env
 import matplotlib.pyplot as plt
 import random
+import stable_baselines.common.vec_env as venv
 
-swtchbrd = Switchboard()
-check = check_env(swtchbrd)
-
-#data collection phase
-for i in range(5000):
-    swtchbrd.step(-1)
-data_actions = [i for i in range(10)]
-for i in range(1000):
-    a = random.sample(data_actions, k=1)[0]
-    swtchbrd.step(a)
-
-# for i in range(1000):
-#     rnd_action = swtchbrd.action_space.sample()
-#     _, reward, _, _ = swtchbrd.step(rnd_action)
-#     swtchbrd.render()
-#     print(str(reward)+'\t')
-
-swtchbrd.agent.display_causal_model()
-# model = DQN(MlpPolicy, swtchbrd, learning_rate=0.001, policy_kwargs={'net_arch': [44, 50, 45]}, buffer_size=10000)
-model = DQN.load('models/exp3.zip', swtchbrd)
-model.learn(200000)
-model.save('models/exp3_cont')
-swtchbrd.agent.display_causal_model()
-plt.plot(swtchbrd.rewards)
-plt.show()
-# print(swtchbrd.agent.get_est_postint_distrib('x0', (2, True)))
-# print()
-# print(swtchbrd.agent.get_est_postint_distrib('x0', (2, False)))
-# print()
-# print(swtchbrd.agent.get_est_avg_causal_effect('x0', (2, True), (2, False)))
-# print()
-# print(swtchbrd.agent.get_est_cond_distr('x0', ('x2', True)))
-# print()
-# print(swtchbrd.agent.get_est_cond_distr('x0', ('x2', False)))
-# print(swtchbrd.agent.evaluate_causal_model())
+from Agents import SwitchboardAgentA2C
+agent = SwitchboardAgentA2C(5)
+env = Switchboard(agent)
+model = A2C(MlpLstmPolicy, env,
+            learning_rate=0.001,
+            policy_kwargs={'net_arch': [24,
+                                        30,
+                                        'lstm',
+                                        {'pi': [45],
+                                         'vf': [10]}],
+                           'n_lstm': 30},
+            epsilon=0.005)
+model.learn(1000)
