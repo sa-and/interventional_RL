@@ -13,8 +13,10 @@ class Switchboard(Env):
     Function = Callable[[], bool]
     Lights: List[bool]
 
-    def __init__(self, agent: CausalAgent):
+    def __init__(self, agent: CausalAgent, fixed_episode_length: bool = False):
         super(Switchboard, self).__init__()
+        self.fixed_episode_length = fixed_episode_length
+
         # initialize causal model
         self.SCM = make_switchboard_scm_without_context()
 
@@ -36,8 +38,10 @@ class Switchboard(Env):
             self.old_obs.append([0.0 for i in range(int(self.observation_space.shape[0]/self.agent.state_repeats))])
 
         self.rewards = []
+        self.steps_this_episode = 0
 
     def reset(self) -> np.ndarray:
+        self.steps_this_episode = 0
         self.agent.random_reset_causal_model()
         # reset observations
         self.old_obs = []
@@ -49,8 +53,8 @@ class Switchboard(Env):
     def step(self, action) -> Tuple[np.ndarray, float, bool, dict]:
         self.current_action = self.agent.get_action_from_actionspace_sample(action)
 
-        interv_scm = copy.deepcopy(self.SCM)
         # apply action
+        interv_scm = copy.deepcopy(self.SCM)
         action_successful = False
         if self.current_action[0] == 0:  # intervention action
             interv_scm.do_interventions([('X'+str(self.current_action[1]), lambda: self.current_action[2])])
@@ -67,6 +71,8 @@ class Switchboard(Env):
         elif self.current_action[0] == None or self.current_action[0] == -1:
             action_successful = True
 
+        self.steps_this_episode += 1
+
         # determine the states of the lights according to the causal structure
         self.lights = interv_scm.get_next_instantiation()[0]
 
@@ -75,20 +81,74 @@ class Switchboard(Env):
         # determine state after action
         self.last_observation = self.get_obs_vector()
 
-        # let the episode end when the causal model is fully learned (loss reaching threshold of -0.006)
+        if self.fixed_episode_length:
+            done, reward = self.do_fixed_eval(action_successful, 20)
+        else:
+            # let the episode end when the causal model is fully learned (loss reaching threshold of -0.006)
+            done, reward = self.do_flexible_eval(action_successful)
+
+        self.prev_action = self.current_action
+        self.rewards.append(reward)
+        if type(self.agent) == ContinuousSwitchboardAgent:
+            print([round(a) for a in self.current_action], '\treward', reward)
+        else:
+            print(self.current_action, '\treward', reward)
+
+        return self.last_observation, reward, done, {}
+
+    def do_fixed_eval(self, action_successful: bool, length_per_episode: int) -> Tuple[bool, float]:
+        '''
+        Ends the episode after 'length_per_episode' steps. Here we only give a reward for the
+        achievement of the goal at the end of each episode. A negative reward for illegal actions
+        is still returned.
+        :param action_successful:
+        :param length_per_episode:
+        :return:
+        '''
+        done = almost_learned = very_almost_learned = learned = False
+        if self.steps_this_episode >= length_per_episode:
+            done = True
+            learned = nx.graph_edit_distance(self.agent.causal_model,
+                                                    get_switchboard_causal_graph()) \
+                             == 0
+            almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+                                                    get_switchboard_causal_graph()) \
+                             == 2
+            very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+                                                         get_switchboard_causal_graph()) \
+                                == 1
+            print('episode done')
+        if not action_successful:  # illegal action was taken
+            reward = -1
+        elif learned:
+            reward = 30
+        elif very_almost_learned:
+            reward = 3
+        elif almost_learned:
+            reward = 2
+        else:
+            reward = 0
+
+        return done, reward
+
+    def do_flexible_eval(self, action_successful: bool) -> Tuple[bool, float]:
+        '''
+        Ends the episode whenever a graph-altering action is performed
+        :param action_successful:
+        :return:
+        '''
         if self.current_action[0] == 1:  # only check if the model actually changed.
             done = self.agent.graph_is_learned()
             almost_learned = nx.graph_edit_distance(self.agent.causal_model,
                                                     get_switchboard_causal_graph()) \
                              == 2
             very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-                                                    get_switchboard_causal_graph()) \
-                             == 1
+                                                         get_switchboard_causal_graph()) \
+                                  == 1
         else:
             done = False
             almost_learned = False
             very_almost_learned = False
-
         # compute reward
         if not action_successful:  # illegal action was taken
             reward = -1
@@ -102,15 +162,7 @@ class Switchboard(Env):
             self.reset()
         else:  # intervention, non-intervention, graph-changing
             reward = 0
-
-        self.prev_action = self.current_action
-        self.rewards.append(reward)
-        if type(self.agent) == ContinuousSwitchboardAgent:
-            print([round(a) for a in self.current_action], '\treward', reward)
-        else:
-            print(self.current_action, '\treward', reward)
-
-        return self.last_observation, reward, done, {}
+        return done, reward
 
     def get_obs_vector(self) -> np.ndarray:
         # push old observations

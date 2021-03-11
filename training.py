@@ -41,6 +41,7 @@ def train_switchboard_a2c(steps: int, workers: int = 8):
                 n_cpu_tf_sess=8)
 
     model.learn(steps)
+    plt.title('A2C flexible length')
     plt.plot(switchboard.envs[0].rewards)
     plt.show()
     return model, switchboard
@@ -68,6 +69,8 @@ def train_switchboard_dqn(steps: int):
                 prioritized_replay=True)
 
     model.learn(steps)
+
+    plt.title('dQN')
     plt.plot(switchboard.rewards)
     plt.show()
     return model, switchboard
@@ -89,6 +92,8 @@ def train_switchboard_ddpg(steps: int):
                  n_cpu_tf_sess=8,
                  buffer_size=50000)
     model.learn(steps)
+
+    plt.title('ddpg')
     plt.plot(switchboard.rewards)
     plt.show()
     return model, switchboard
