@@ -2,41 +2,32 @@ from typing import List, Callable, Tuple, NoReturn, Any
 
 from gym import Env
 import random
-from Agents import CausalAgent, SwitchboardAgentDQN, SwitchboardAgentA2C, get_switchboard_causal_graph, get_wrong_switchboard_causal_graph
+from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardAgent, get_switchboard_causal_graph
 import copy
 import numpy as np
 import networkx as nx
 
 
 class Switchboard(Env):
-    Agent: SwitchboardAgentDQN
+    Agent: DiscreteSwitchboardAgent
     Function = Callable[[], bool]
     Lights: List[bool]
 
     def __init__(self, agent: CausalAgent):
         super(Switchboard, self).__init__()
         # initialize causal model
-        self.SCM = StructuralCausalModel()
-        self.SCM.add_exogenous_vars([('U' + str(i), True, random.choice, {'seq': [True, False]}) for i in range(5)])
-        self.SCM.add_endogenous_vars(
-            [
-                ('X0', False, lambda x4, u0: x4 or u0, {'x4': 'X4', 'u0': 'U0'}),
-                ('X1', False, lambda x0, x2, x4, u1: x0 or x2 or x4 or u1, {'x0': 'X0', 'x2': 'X2', 'x4': 'X4', 'u1': 'U1'}),
-                ('X2', False, lambda x4, u2: x4 or u2, {'x4': 'X4', 'u2': 'U2'}),
-                ('X3', False, lambda x2, u3: x2 or u3, {'x2': 'X2', 'u3': 'U3'}),
-                ('X4', False, lambda u4: u4, {'u4': 'U4'})
-            ])
+        self.SCM = make_switchboard_scm_without_context()
 
         self.lights = [False]*5  # all lights are off
 
-        assert type(agent) == SwitchboardAgentDQN or type(agent) == SwitchboardAgentA2C, \
+        assert type(agent) == DiscreteSwitchboardAgent or type(agent) == ContinuousSwitchboardAgent, \
             'Wrong agent for this environment'
 
         self.agent = agent
         self.action_space = self.agent.action_space
-        if type(self.agent) == SwitchboardAgentDQN:
+        if type(self.agent) == DiscreteSwitchboardAgent:
             self.current_action = (None, None, None)
-        elif type(self.agent) == SwitchboardAgentA2C:
+        elif type(self.agent) == ContinuousSwitchboardAgent:
             self.current_action = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.observation_space = self.agent.observation_space
         self.prev_action = None
@@ -55,22 +46,8 @@ class Switchboard(Env):
 
         return self.get_obs_vector()
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, dict]:
-        if type(self.agent) == SwitchboardAgentDQN:
-            self.current_action = self.agent.actions[action]
-        elif type(self.agent) == SwitchboardAgentA2C:
-            self.current_action = [round(a) for a in action]
-            # clip values
-            if self.current_action[1] < 0:
-                self.current_action[1] = 0
-            elif self.current_action[1] > len(self.agent.var_names):
-                self.current_action[1] = len(self.agent.var_names) - 1
-            if self.current_action[3] > len(self.agent.var_names):
-                self.current_action[3] = len(self.agent.var_names) - 1
-            if self.current_action[4] > len(self.agent.var_names):
-                self.current_action[4] = len(self.agent.var_names) - 1
-            if self.current_action[5] > 2:
-                self.current_action[5] = 2
+    def step(self, action) -> Tuple[np.ndarray, float, bool, dict]:
+        self.current_action = self.agent.get_action_from_actionspace_sample(action)
 
         interv_scm = copy.deepcopy(self.SCM)
         # apply action
@@ -78,13 +55,13 @@ class Switchboard(Env):
         if self.current_action[0] == 0:  # intervention action
             interv_scm.do_interventions([('X'+str(self.current_action[1]), lambda: self.current_action[2])])
             action_successful = True
-        elif self.current_action[0] == 1 and self.current_action[-1] == 2 and self.prev_action[-1] == 2:  # don't allow reversal of edge that has just been reversed
-            if type(self.agent) == SwitchboardAgentDQN and self.current_action[1] == self.prev_action[1]:
-                action_successful = False
-            elif type(self.agent) == SwitchboardAgentA2C and\
-                    self.current_action[3] == self.prev_action[3] and\
-                    self.current_action[4] == self.prev_action[4]:
-                action_successful = False
+        # elif self.current_action[0] == 1 and self.current_action[-1] == 2 and self.prev_action[-1] == 2:  # don't allow reversal of edge that has just been reversed
+        #     if type(self.agent) == DeterministicSwitchboardAgent and self.current_action[1] == self.prev_action[1]:
+        #         action_successful = False
+        #     elif type(self.agent) == ContinuousSwitchboardAgent and\
+        #             self.current_action[3] == self.prev_action[3] and\
+        #             self.current_action[4] == self.prev_action[4]:
+        #         action_successful = False
         elif self.current_action[0] == 1:
             action_successful = self.agent.update_model_per_action(self.current_action)
         elif self.current_action[0] == None or self.current_action[0] == -1:
@@ -128,7 +105,7 @@ class Switchboard(Env):
 
         self.prev_action = self.current_action
         self.rewards.append(reward)
-        if type(self.agent) == SwitchboardAgentA2C:
+        if type(self.agent) == ContinuousSwitchboardAgent:
             print([round(a) for a in self.current_action], '\treward', reward)
         else:
             print(self.current_action, '\treward', reward)
@@ -251,3 +228,31 @@ class StructuralCausalModel:
             self.functions[interv[0]] = (interv[1], {})
 
 
+def make_switchboard_scm_with_context():
+    SCM = StructuralCausalModel()
+    SCM.add_exogenous_vars([('U' + str(i), True, random.choice, {'seq': [True, False]}) for i in range(5)])
+    SCM.add_endogenous_vars(
+        [
+            ('X0', False, lambda x4, u0: x4 or u0, {'x4': 'X4', 'u0': 'U0'}),
+            (
+            'X1', False, lambda x0, x2, x4, u1: x0 or x2 or x4 or u1, {'x0': 'X0', 'x2': 'X2', 'x4': 'X4', 'u1': 'U1'}),
+            ('X2', False, lambda x4, u2: x4 or u2, {'x4': 'X4', 'u2': 'U2'}),
+            ('X3', False, lambda x2, u3: x2 or u3, {'x2': 'X2', 'u3': 'U3'}),
+            ('X4', False, lambda u4: u4, {'u4': 'U4'})
+        ])
+
+    return SCM
+
+
+def make_switchboard_scm_without_context():
+    SCM = StructuralCausalModel()
+    SCM.add_endogenous_vars(
+        [
+            ('X0', False, lambda x4: x4, {'x4': 'X4'}),
+            ('X1', False, lambda x0, x2, x4: x0 or x2 or x4, {'x0': 'X0', 'x2': 'X2', 'x4': 'X4'}),
+            ('X2', False, lambda x4: x4, {'x4': 'X4'}),
+            ('X3', False, lambda x2: x2, {'x2': 'X2'}),
+            ('X4', False, lambda: False, {})
+        ])
+
+    return SCM

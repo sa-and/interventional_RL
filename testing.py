@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import random
 import stable_baselines.common.vec_env as venv
 
-from Agents import SwitchboardAgentA2C
-agent = SwitchboardAgentA2C(5)
+from Agents import ContinuousSwitchboardAgent
+agent = ContinuousSwitchboardAgent(5)
 env = Switchboard(agent)
 model = A2C(MlpLstmPolicy, env,
             learning_rate=0.001,

@@ -1,4 +1,4 @@
-from typing import Tuple, List, Optional, NoReturn, Union, Any, overload
+from typing import Tuple, List, Optional, NoReturn, Union, Any
 from abc import ABC, abstractmethod
 from causalnex.structure import StructureModel
 from causalnex.network import BayesianNetwork
@@ -250,15 +250,19 @@ class CausalAgent(ABC):
         is_connected = nx.number_weakly_connected_components(model) <= 1
         return is_connected
 
+    @abstractmethod
+    def get_action_from_actionspace_sample(self, sample: Any):
+        raise NotImplementedError
 
-class SwitchboardAgentDQN(CausalAgent):
+
+class DiscreteSwitchboardAgent(CausalAgent):
     current_mode: str
     action = Tuple[Optional[int], Optional[Union[int, Tuple[str, str]]], Optional[Union[bool, int]]]
     actions: List[action]
     state_repeats: int
 
     def __init__(self, n_switches: int, causal_graph: StructureModel = None, state_repeats: int = 1):
-        super(SwitchboardAgentDQN, self).__init__(n_switches, causal_graph)
+        super(DiscreteSwitchboardAgent, self).__init__(n_switches, causal_graph)
 
         # create a list of actions that can be performed on the switchboard
         # actions for interventions represented as (0, variable, value)
@@ -290,12 +294,15 @@ class SwitchboardAgentDQN(CausalAgent):
 
         return self.update_model(edge, manipulation)
 
+    def get_action_from_actionspace_sample(self, sample: int):
+        return self.actions[sample]
 
-class SwitchboardAgentA2C(CausalAgent):
-    action: Tuple[float, float, float, float, float, float]  # (action_type, inter_var, inter_val, edge_u, edge_v, mani)
+
+class ContinuousSwitchboardAgent(CausalAgent):
+    action = List[int]  # (action_type, inter_var, inter_val, edge_u, edge_v, mani)
 
     def __init__(self, n_switches: int, causal_graph: StructureModel = None, state_repeats: int = 1):
-        super(SwitchboardAgentA2C, self).__init__(n_switches, causal_graph)
+        super(ContinuousSwitchboardAgent, self).__init__(n_switches, causal_graph)
 
         self.action_space = Box(low=np.array([-1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
                                 high=np.array([1.0,
@@ -306,32 +313,61 @@ class SwitchboardAgentA2C(CausalAgent):
                                       2.0]),
                                 shape=(6,))
         self.state_repeats = state_repeats
-        self.observation_space = Box(0, 1,
+        self.observation_space = Box(0,
+                                     1,
                                      (state_repeats * (int((n_switches * 2) + n_switches * (n_switches - 1) / 2)),))
 
-    def store_observation_per_action(self, obs: List[Any], action: Any):
-        action = [int(round(val)) for val in action]  # discretize action
+    def store_observation_per_action(self, obs: List[Any], action: action):
         if action[0] == -1 or action[0] == 1:  # no itervention
             self.store_observation(obs, None, None)
         else:
             self.store_observation(obs, self.var_names[action[1]], bool(action[2]))
 
-    def update_model_per_action(self, action: Any):
-        action = [int(round(val)) for val in action]  # discretize action
+    def update_model_per_action(self, action: action) -> bool:
         if action[3] == action[4]:  # edge on the same node
             return False
         return self.update_model((self.var_names[action[3]], self.var_names[action[4]]), action[5])
-    #
-    # def discretize_action(self, action):
-    #     dist_action = []
-    #     if action[0] <= -0.5:  # None action
-    #         dist_action = None
-    #     elif action[0] > -0.5 and action[0] < 0.5:  # intervention action
-    #         dist_action.append(0)
-    #         dist_action.append()
-    #     elif action[0] >= 0.5:  # manipulation action
-    #         pass
-        
+
+    def get_action_from_actionspace_sample(self, sample: List[float]) -> List[int]:
+        action = [round(s) for s in sample]
+
+        # action type one of -1, 0, 1
+        if action[0] < 0:
+            action[0] = -1
+        elif action[0] > 1:
+            action[0] = 1
+
+        # interv var
+        if action[1] < 0:
+           action[1] = 0
+        elif action[1] >= len(self.var_names):
+            action[1] = len(self.var_names) - 1
+
+        # value for inter var
+        if action[2] < 1:
+            action[2] = 0
+        else:
+            action[2] = 1
+
+        # edge u
+        if action[3] < 0:
+            action[3] = 0
+        elif action[3] >= len(self.var_names):
+            action[3] = len(self.var_names) - 1
+
+        # edge v
+        if action[4] < 0:
+           action[4] = 0
+        elif action[4] >= len(self.var_names):
+            action[4] = len(self.var_names) - 1
+
+        # manipulation
+        if action[5] < 0:
+            action[5] = 0
+        elif action[5] > 2:
+            action[5] = 2
+
+        return action
 
 
 def get_switchboard_causal_graph() -> StructureModel:
