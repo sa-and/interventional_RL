@@ -108,6 +108,40 @@ class CausalAgent(ABC):
 
         return exp_val1 - exp_val2
 
+    def compare_edge_to_data(self, edge: Tuple[str, str], threshold: float) -> bool:
+        '''
+        Checks whether the edge of the model corresponds to an actual causal effect in the interventional data. So for
+        a given edge A -> B it checks whether P(B|do(A=true)) != P(B|do(A=false)) holds in the collected interventional
+        data set.
+        Note that this direct effect suggested in the model could actually be an indirect one in the data. Still, this
+        methods returns true in this case.
+
+        :param edge: The edge to be checked. E.g. ('x1', 'x2')
+        :param threshold: The value from which on the effect is assumed to be present.
+        :return: Whether the causal edge is backed up by the interventional data.
+        '''
+        assert self.causal_model.has_edge(edge[0], edge[1]), 'The given edge is not part of the current model.'
+
+        est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
+
+        if est_causal_effect >= threshold:
+            return True
+        else:
+            return False
+
+    def has_wrong_edges(self, threshold: float) -> int:
+        '''
+        Determines how many edges in the current causal model do not have a causal effect in the interventional
+        data set that is bigger than the given threshold.
+        :param threshold:
+        :return: number of 'wrong' edges
+        '''
+        count = 0
+        for e in self.causal_model.edges:
+            if not self.compare_edge_to_data(e, threshold):
+                count += 1
+        return count
+
     @staticmethod
     def _get_expected_value(distribution: pd.Series) -> float:
         if type(distribution.index[0] == bool):
@@ -374,6 +408,18 @@ def get_switchboard_causal_graph() -> StructureModel:
     model = StructureModel()
     [model.add_node(name) for name in ['x'+str(i) for i in range(5)]]
     model.add_edge('x0', 'x1')
+    model.add_edge('x2', 'x1')
+    model.add_edge('x2', 'x3')
+    model.add_edge('x4', 'x0')
+    model.add_edge('x4', 'x1')
+    model.add_edge('x4', 'x2')
+    return model
+
+
+def get_almost_right_switchboard_causal_graph() -> StructureModel:
+    model = StructureModel()
+    [model.add_node(name) for name in ['x'+str(i) for i in range(5)]]
+    model.add_edge('x1', 'x0')
     model.add_edge('x2', 'x1')
     model.add_edge('x2', 'x3')
     model.add_edge('x4', 'x0')

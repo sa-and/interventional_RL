@@ -6,16 +6,18 @@ import matplotlib.pyplot as plt
 import random
 import stable_baselines.common.vec_env as venv
 
-from Agents import ContinuousSwitchboardAgent
-agent = ContinuousSwitchboardAgent(5)
+from Agents import ContinuousSwitchboardAgent, DiscreteSwitchboardAgent, get_almost_right_switchboard_causal_graph
+
+
+agent = DiscreteSwitchboardAgent(5, get_almost_right_switchboard_causal_graph())
 env = Switchboard(agent)
-model = A2C(MlpLstmPolicy, env,
-            learning_rate=0.001,
-            policy_kwargs={'net_arch': [24,
-                                        30,
-                                        'lstm',
-                                        {'pi': [45],
-                                         'vf': [10]}],
-                           'n_lstm': 30},
-            epsilon=0.005)
-model.learn(1000)
+
+# data collection phase
+for i in range(100):
+    env.step(-1)
+data_actions = [i for i in range(10)]
+for i in range(1000):
+    a = random.sample(data_actions, k=1)[0]
+    env.step(a)
+
+print(agent.has_wrong_edges(0.1))
