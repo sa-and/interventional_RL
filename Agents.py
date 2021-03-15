@@ -42,6 +42,9 @@ class CausalAgent(ABC):
         self.actions = []
         self.state_repeats = None
 
+    def set_causal_model(self, causal_model: StructureModel):
+        self.causal_model = causal_model
+
     def random_reset_causal_model(self):
         all_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
         random.shuffle(all_pairs)
@@ -122,12 +125,14 @@ class CausalAgent(ABC):
         '''
         assert self.causal_model.has_edge(edge[0], edge[1]), 'The given edge is not part of the current model.'
 
-        est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
+        if '(' + edge[0] + ', True)' in self.collected_data and '(' + edge[0] + ', False)' in self.collected_data:
+            est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
 
-        if est_causal_effect >= threshold:
-            return True
-        else:
-            return False
+            if est_causal_effect >= threshold:
+                return True
+            else:
+                return False
+        return True
 
     def has_wrong_edges(self, threshold: float = 0.0) -> int:
         '''
@@ -159,8 +164,11 @@ class CausalAgent(ABC):
             return False
         
         else:
-            effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
-            return effect >= threshold
+            if '(' + edge[0] + ', True)' in self.collected_data and '(' + edge[0] + ', False)' in self.collected_data:
+                effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
+                return effect >= threshold
+            else:
+                return True
         
     def has_missing_edges(self, threshold: float = 0.0) -> int:
         '''
@@ -298,7 +306,6 @@ class CausalAgent(ABC):
         n_wrong_edges = self.has_wrong_edges(threshold)
         n_missing_edges = self.has_missing_edges(threshold)
         return n_wrong_edges == 0 and n_missing_edges == 0
-
 
     def get_graph_state(self) -> List[float]:
         '''

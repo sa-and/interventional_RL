@@ -12,22 +12,30 @@ from stable_baselines.common.noise import NormalActionNoise, OrnsteinUhlenbeckAc
 from stable_baselines import DDPG
 
 
-def create_switchboard_a2c():
+def create_switchboard_a2c_fixed():
     agent = ContinuousSwitchboardAgent(5)
-    a = Switchboard(agent)
+    a = Switchboard(agent, fixed_episode_length=True)
     return a
 
 
-def train_switchboard_a2c(steps: int, workers: int = 8):
-    switchboard = venv.DummyVecEnv([create_switchboard_a2c for i in range(workers)])
+def create_switchboard_a2c_dynamic():
+    agent = ContinuousSwitchboardAgent(5)
+    a = Switchboard(agent, fixed_episode_length=False)
+    return a
+
+
+def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = False):
+    if fixed_length:
+        switchboard = venv.DummyVecEnv([create_switchboard_a2c_fixed for i in range(workers)])
+    else:
+        switchboard = venv.DummyVecEnv([create_switchboard_a2c_dynamic for i in range(workers)])
+
     # data collection phase
-    # for i in range(1000):
-    #     switchboard.envs[0].step(-1)
-    #
-    # data_actions = [i for i in range(10)]
-    # for i in range(500):
-    #     a = random.sample(data_actions, k=1)[0]
-    #     switchboard.envs[0].step(a)
+    for i in range(500):
+        a = switchboard.envs[0].action_space.sample()
+        a = [a for i in range(workers)]
+        switchboard.step(a)
+    print('data collection phase done\n\n\n\n\n\n\n\n\n\n')
 
     model = A2C(MlpLstmPolicy, switchboard,
                 learning_rate=0.0001,
@@ -41,15 +49,16 @@ def train_switchboard_a2c(steps: int, workers: int = 8):
                 n_cpu_tf_sess=8)
 
     model.learn(steps)
-    plt.title('A2C flexible length')
+    title = 'A2C, fixed = ' + str(fixed_length)
+    plt.title(title)
     plt.plot(switchboard.envs[0].rewards)
     plt.show()
     return model, switchboard
 
 
-def train_switchboard_dqn(steps: int):
+def train_switchboard_dqn(steps: int, fixed_length):
     agent = DiscreteSwitchboardAgent(5, state_repeats=3)
-    switchboard = Switchboard(agent)
+    switchboard = Switchboard(agent, fixed_episode_length=fixed_length)
 
     # data collection phase
     for i in range(1000):
@@ -70,7 +79,8 @@ def train_switchboard_dqn(steps: int):
 
     model.learn(steps)
 
-    plt.title('dQN')
+    title = 'DQN, fixed = ' + str(fixed_length)
+    plt.title(title)
     plt.plot(switchboard.rewards)
     plt.show()
     return model, switchboard
@@ -100,7 +110,7 @@ def train_switchboard_ddpg(steps: int):
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_a2c(200000)
+model, board = train_switchboard_dqn(200000, fixed_length=True)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
-model.save('models/exp7')
+model.save('models/exp8')

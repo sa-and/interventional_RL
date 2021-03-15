@@ -2,7 +2,8 @@ from typing import List, Callable, Tuple, NoReturn, Any
 
 from gym import Env
 import random
-from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardAgent, get_switchboard_causal_graph
+from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardAgent,\
+    get_switchboard_causal_graph, get_almost_right_switchboard_causal_graph
 import copy
 import numpy as np
 import networkx as nx
@@ -42,7 +43,7 @@ class Switchboard(Env):
 
     def reset(self) -> np.ndarray:
         self.steps_this_episode = 0
-        self.agent.random_reset_causal_model()
+        self.agent.set_causal_model(get_almost_right_switchboard_causal_graph())
         # reset observations
         self.old_obs = []
         for i in range(self.agent.state_repeats):
@@ -108,24 +109,22 @@ class Switchboard(Env):
         done = almost_learned = very_almost_learned = learned = False
         if self.steps_this_episode >= length_per_episode:
             done = True
-            learned = nx.graph_edit_distance(self.agent.causal_model,
-                                                    get_switchboard_causal_graph()) \
-                             == 0
-            almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-                                                    get_switchboard_causal_graph()) \
-                             == 2
-            very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-                                                         get_switchboard_causal_graph()) \
-                                == 1
+            learned = self.agent.graph_is_learned()
+            # almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+            #                                         get_switchboard_causal_graph()) \
+            #                  == 2
+            # very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+            #                                              get_switchboard_causal_graph()) \
+            #                     == 1
             print('episode done')
         if not action_successful:  # illegal action was taken
             reward = -1
         elif learned:
             reward = 30
-        elif very_almost_learned:
-            reward = 3
-        elif almost_learned:
-            reward = 2
+        # elif very_almost_learned:
+        #     reward = 3
+        # elif almost_learned:
+        #     reward = 2
         else:
             reward = 0
 
@@ -139,23 +138,23 @@ class Switchboard(Env):
         '''
         if self.current_action[0] == 1:  # only check if the model actually changed.
             done = self.agent.graph_is_learned()
-            almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-                                                    get_switchboard_causal_graph()) \
-                             == 2
-            very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-                                                         get_switchboard_causal_graph()) \
-                                  == 1
+            # almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+            #                                         get_switchboard_causal_graph()) \
+            #                  == 2
+            # very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
+            #                                              get_switchboard_causal_graph()) \
+            #                       == 1
         else:
             done = False
-            almost_learned = False
-            very_almost_learned = False
+            # almost_learned = False
+            # very_almost_learned = False
         # compute reward
         if not action_successful:  # illegal action was taken
             reward = -1
-        elif almost_learned:
-            reward = 2
-        elif very_almost_learned:
-            reward = 3
+        # elif almost_learned:
+        #     reward = 2
+        # elif very_almost_learned:
+        #     reward = 3
         elif done:  # the graph has been learned
             reward = 30
             self.agent.display_causal_model()
