@@ -31,7 +31,7 @@ def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = Fal
         switchboard = venv.DummyVecEnv([create_switchboard_a2c_dynamic for i in range(workers)])
 
     # data collection phase
-    for i in range(500):
+    for i in range(50):
         a = switchboard.envs[0].action_space.sample()
         a = [a for i in range(workers)]
         switchboard.step(a)
@@ -110,7 +110,7 @@ def train_switchboard_ddpg(steps: int):
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_dqn(200000, fixed_length=True)
+model, board = train_switchboard_a2c(200000, fixed_length=True)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
-model.save('models/exp8')
+model.save('models/exp7')

@@ -125,7 +125,7 @@ class CausalAgent(ABC):
         '''
         assert self.causal_model.has_edge(edge[0], edge[1]), 'The given edge is not part of the current model.'
 
-        if '(' + edge[0] + ', True)' in self.collected_data and '(' + edge[0] + ', False)' in self.collected_data:
+        if '(' + edge[0] + ',True)' in self.collected_data and '(' + edge[0] + ',False)' in self.collected_data:
             est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
 
             if est_causal_effect >= threshold:
@@ -164,7 +164,7 @@ class CausalAgent(ABC):
             return False
         
         else:
-            if '(' + edge[0] + ', True)' in self.collected_data and '(' + edge[0] + ', False)' in self.collected_data:
+            if '(' + edge[0] + ',True)' in self.collected_data and '(' + edge[0] + ',False)' in self.collected_data:
                 effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
                 return effect >= threshold
             else:
@@ -304,7 +304,9 @@ class CausalAgent(ABC):
 
     def graph_is_learned(self, threshold: float = 0.0) -> bool:
         n_wrong_edges = self.has_wrong_edges(threshold)
+        print('wrong edges: ', n_wrong_edges)
         n_missing_edges = self.has_missing_edges(threshold)
+        print('missing edges: ', n_missing_edges)
         return n_wrong_edges == 0 and n_missing_edges == 0
 
     def get_graph_state(self) -> List[float]:

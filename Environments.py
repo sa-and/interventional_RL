@@ -83,7 +83,7 @@ class Switchboard(Env):
         self.last_observation = self.get_obs_vector()
 
         if self.fixed_episode_length:
-            done, reward = self.do_fixed_eval(action_successful, 20)
+            done, reward = self.do_fixed_eval(action_successful, 3)
         else:
             # let the episode end when the causal model is fully learned (loss reaching threshold of -0.006)
             done, reward = self.do_flexible_eval(action_successful)
@@ -109,7 +109,7 @@ class Switchboard(Env):
         done = almost_learned = very_almost_learned = learned = False
         if self.steps_this_episode >= length_per_episode:
             done = True
-            learned = self.agent.graph_is_learned()
+            learned = self.agent.graph_is_learned(threshold=0.1)
             # almost_learned = nx.graph_edit_distance(self.agent.causal_model,
             #                                         get_switchboard_causal_graph()) \
             #                  == 2
@@ -121,6 +121,7 @@ class Switchboard(Env):
             reward = -1
         elif learned:
             reward = 30
+            self.agent.display_causal_model()
         # elif very_almost_learned:
         #     reward = 3
         # elif almost_learned:
@@ -137,7 +138,7 @@ class Switchboard(Env):
         :return:
         '''
         if self.current_action[0] == 1:  # only check if the model actually changed.
-            done = self.agent.graph_is_learned()
+            done = self.agent.graph_is_learned(threshold=0.1)
             # almost_learned = nx.graph_edit_distance(self.agent.causal_model,
             #                                         get_switchboard_causal_graph()) \
             #                  == 2
