@@ -1,21 +1,24 @@
 from Environments import Switchboard
-from Agents import SwitchboardAgentDQN, SwitchboardAgentA2C
+from Agents import DiscreteSwitchboardAgent, ContinuousSwitchboardAgent
 from stable_baselines.a2c import A2C
 from stable_baselines.common.policies import MlpLstmPolicy
-from stable_baselines.deepq.policies import MlpPolicy
+from stable_baselines.deepq.policies import MlpPolicy as dqnMlpPolicy
 from stable_baselines import DQN
 import random
 import stable_baselines.common.vec_env as venv
 import matplotlib.pyplot as plt
+from stable_baselines.ddpg.policies import MlpPolicy as ddpgMlpPolicy
+from stable_baselines.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
+from stable_baselines import DDPG
 
 
 def create_switchboard_a2c():
-    agent = SwitchboardAgentA2C(5)
+    agent = ContinuousSwitchboardAgent(5)
     a = Switchboard(agent)
     return a
 
 
-def train_switchboard_a2c(steps: int, workers: int = 4):
+def train_switchboard_a2c(steps: int, workers: int = 8):
     switchboard = venv.DummyVecEnv([create_switchboard_a2c for i in range(workers)])
     # data collection phase
     # for i in range(1000):
@@ -28,20 +31,24 @@ def train_switchboard_a2c(steps: int, workers: int = 4):
 
     model = A2C(MlpLstmPolicy, switchboard,
                 learning_rate=0.0001,
-                policy_kwargs={'net_arch': [24,
-                                            30,
+                policy_kwargs={'net_arch': [50,
                                             'lstm',
-                                            {'pi': [45],
+                                            {'pi': [15],
                                              'vf': [10]}],
-                               'n_lstm': 30},
-                epsilon=0.05)
+                               'n_lstm': 50},
+                epsilon=0.05,
+                n_steps=5,
+                n_cpu_tf_sess=8)
 
     model.learn(steps)
+    plt.title('A2C flexible length')
+    plt.plot(switchboard.envs[0].rewards)
+    plt.show()
     return model, switchboard
 
 
 def train_switchboard_dqn(steps: int):
-    agent = SwitchboardAgentDQN(5, state_repeats=4)
+    agent = DiscreteSwitchboardAgent(5, state_repeats=3)
     switchboard = Switchboard(agent)
 
     # data collection phase
@@ -52,22 +59,48 @@ def train_switchboard_dqn(steps: int):
         a = random.sample(data_actions, k=1)[0]
         switchboard.step(a)
 
-    model = DQN(MlpPolicy, switchboard,
+    model = DQN(dqnMlpPolicy, switchboard,
                 buffer_size=50000,
                 learning_rate=0.001,
                 policy_kwargs={'layers': [90, 50, 45]},
                 exploration_final_eps=0.05,
-                batch_size=1024,
-                n_cpu_tf_sess=8)
+                batch_size=64,
+                n_cpu_tf_sess=8,
+                prioritized_replay=True)
 
     model.learn(steps)
+
+    plt.title('dQN')
+    plt.plot(switchboard.rewards)
+    plt.show()
+    return model, switchboard
+
+
+def train_switchboard_ddpg(steps: int):
+    agent = ContinuousSwitchboardAgent(5, state_repeats=3)
+    switchboard = Switchboard(agent)
+
+    n_actions = switchboard.action_space.shape[-1]
+    param_noise = None
+    action_noise = NormalActionNoise(0, 0.1)
+
+    model = DDPG(ddpgMlpPolicy,
+                 switchboard,
+                 param_noise=param_noise,
+                 action_noise=action_noise,
+                 policy_kwargs={'layers': [90, 40, 10]},
+                 n_cpu_tf_sess=8,
+                 buffer_size=50000)
+    model.learn(steps)
+
+    plt.title('ddpg')
+    plt.plot(switchboard.rewards)
+    plt.show()
     return model, switchboard
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_dqn(150000)
+model, board = train_switchboard_a2c(200000)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
-model.save('models/exp5')
-plt.plot(board.rewards)
-plt.show()
+model.save('models/exp7')
