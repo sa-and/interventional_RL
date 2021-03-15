@@ -108,7 +108,7 @@ class CausalAgent(ABC):
 
         return exp_val1 - exp_val2
 
-    def compare_edge_to_data(self, edge: Tuple[str, str], threshold: float) -> bool:
+    def compare_edge_to_data(self, edge: Tuple[str, str], threshold: float = 0.0) -> bool:
         '''
         Checks whether the edge of the model corresponds to an actual causal effect in the interventional data. So for
         a given edge A -> B it checks whether P(B|do(A=true)) != P(B|do(A=false)) holds in the collected interventional
@@ -129,7 +129,7 @@ class CausalAgent(ABC):
         else:
             return False
 
-    def has_wrong_edges(self, threshold: float) -> int:
+    def has_wrong_edges(self, threshold: float = 0.0) -> int:
         '''
         Determines how many edges in the current causal model do not have a causal effect in the interventional
         data set that is bigger than the given threshold.
@@ -141,6 +141,61 @@ class CausalAgent(ABC):
             if not self.compare_edge_to_data(e, threshold):
                 count += 1
         return count
+    
+    def edge_is_missing(self, edge: Tuple[str, str], threshold: float = 0.0) -> bool:
+        '''
+        Checks whether for the given edge (which is not part of the model) there is a causal effect in the collected
+        interventional data. If true, there should be a directed path between edge[0] and edge[1] in the model but
+        there is none. This means that along the path from edge[0] to edge[1] at least one edge is missing.
+        
+        :param edge: Edge to check
+        :param threshold: Value from which on the effect is to be considered an actual effect.
+        :return: Whether, according to the interventional data there should be an edge but is none.
+        '''
+        if edge in self.causal_model.edges:
+            return False
+
+        elif nx.has_path(self.causal_model, edge[0], edge[1]):
+            return False
+        
+        else:
+            effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
+            return effect >= threshold
+        
+    def has_missing_edges(self, threshold: float = 0.0) -> int:
+        '''
+        Returns the maximal number of missing edges in the model according to the collected interventional
+        data. The maximum number is returned because the exact number cannot be determined with an intervention
+        on a single variable.
+
+        :param threshold:
+        :return:
+
+        Example
+        ---------
+        Let the ground truth causal model be A -> B -> C and the causal model of the agent A   B -> C (missing
+        edge between A and B). This method will return 2. This is because the edge between A and B induces an indirect
+        effect of A on C which cannot be distilled from a direct effect that could be present from A to C.
+
+        The collected interventional data with the intervention only on one variable cannot distinguish between
+        A -> B -> C and A -> B -> C, hence a maximum of 2 edges are missing.
+                        |         ^
+                        - - - - - |
+        Important: Once there is any path from A to C, no edge is considered to be missing.
+        e.g. applied to the model A -> B -> C this method returns 0
+        e.g. applied to the model A -> C <- B this method returns 1 as the edge A -> B is missing.
+
+        '''
+        missing_edges = 0
+        # check which causal relationships are missing in the graph
+        for n in self.causal_model.nodes:
+            # iterate over all nodes that do not already have an edge from n
+            for nn in nx.non_neighbors(self.causal_model, n):
+                current_edge = (str(n), str(nn))
+                if self.edge_is_missing(current_edge, threshold):
+                    missing_edges += 1
+        
+        return missing_edges
 
     @staticmethod
     def _get_expected_value(distribution: pd.Series) -> float:
@@ -419,7 +474,7 @@ def get_switchboard_causal_graph() -> StructureModel:
 def get_almost_right_switchboard_causal_graph() -> StructureModel:
     model = StructureModel()
     [model.add_node(name) for name in ['x'+str(i) for i in range(5)]]
-    model.add_edge('x1', 'x0')
+    model.add_edge('x0', 'x1')
     model.add_edge('x2', 'x1')
     model.add_edge('x2', 'x3')
     model.add_edge('x4', 'x0')

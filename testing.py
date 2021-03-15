@@ -20,4 +20,4 @@ for i in range(1000):
     a = random.sample(data_actions, k=1)[0]
     env.step(a)
 
-print(agent.has_wrong_edges(0.1))
+print(agent.has_missing_edges(0.1))
