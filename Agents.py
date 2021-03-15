@@ -249,58 +249,56 @@ class CausalAgent(ABC):
         nx.draw_circular(self.causal_model, ax=ax, with_labels=True)
         fig.show()
 
-    def evaluate_causal_model(self) -> float:
-        '''
-        Evaluate how well the estimated model of the agent fits the interventional data collected from the
-        actual environment.
-        :return:
-        '''
-        if '(None, None)' in self.collected_data and len(self.collected_data['(None, None)']) < 100:  # minimal amout of observations for evaluation
-            return -2
-        # estimate bayesian network from the structure of the model and observational data
-        bn = BayesianNetwork(self.causal_model)
-        if type(self.collected_data) == bool:
-            bn.fit_node_states_and_cpds(self.collected_data['(None, None)'].replace([True, False], [1, 0]))
-        else:
-            raise NotImplementedError
+    # def evaluate_causal_model(self) -> float:
+    #     '''
+    #     Evaluate how well the estimated model of the agent fits the interventional data collected from the
+    #     actual environment.
+    #     :return:
+    #     '''
+    #     if '(None, None)' in self.collected_data and len(self.collected_data['(None, None)']) < 100:  # minimal amout of observations for evaluation
+    #         return -2
+    #     # estimate bayesian network from the structure of the model and observational data
+    #     bn = BayesianNetwork(self.causal_model)
+    #     if type(self.collected_data) == bool:
+    #         bn.fit_node_states_and_cpds(self.collected_data['(None, None)'].replace([True, False], [1, 0]))
+    #     else:
+    #         raise NotImplementedError
+    #
+    #     ie = InferenceEngine(bn)
+    #     var_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
+    #     var_pairs = [pair for pair in var_pairs if self.is_legal_intervention(pair[0])]  # only legal pairs
+    #
+    #     losses = []
+    #     for pair in var_pairs:
+    #         for val in [0, 1]:  # TODO: generalize this to the actual domain of the variables (maybe through bn.Node_states)
+    #             did = False  # TODO: move this right after the start of outer loop or filter before loop
+    #             try:
+    #                 ie.do_intervention(pair[0], val)
+    #                 did = True
+    #                 predicted_dist = pd.Series(ie.query()[pair[1]])
+    #                 est_true_distribution = self.get_est_postint_distrib(pair[1], pair[0], bool(val))
+    #
+    #                 if len(self.collected_data[str((pair[0], bool(val)))]) > 4:  # minimal size for interventional distributions
+    #                     expvalpred = self._get_expected_value(predicted_dist)
+    #                     expvaltrue = self._get_expected_value(est_true_distribution)
+    #                     losses.append((expvalpred-expvaltrue)**2)
+    #
+    #             except ValueError as e:
+    #                 print(e)
+    #
+    #             if did:
+    #                 ie.reset_do(pair[0])
+    #
+    #     if len(losses) == 0:  # all interventional distributions were too small
+    #         return -2
+    #     else:
+    #         return -sum(losses)/len(losses)
 
-        ie = InferenceEngine(bn)
-        var_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
-        var_pairs = [pair for pair in var_pairs if self.is_legal_intervention(pair[0])]  # only legal pairs
+    def graph_is_learned(self, threshold: float = 0.0) -> bool:
+        n_wrong_edges = self.has_wrong_edges(threshold)
+        n_missing_edges = self.has_missing_edges(threshold)
+        return n_wrong_edges == 0 and n_missing_edges == 0
 
-        losses = []
-        for pair in var_pairs:
-            for val in [0, 1]:  # TODO: generalize this to the actual domain of the variables (maybe through bn.Node_states)
-                did = False  # TODO: move this right after the start of outer loop or filter before loop
-                try:
-                    ie.do_intervention(pair[0], val)
-                    did = True
-                    predicted_dist = pd.Series(ie.query()[pair[1]])
-                    est_true_distribution = self.get_est_postint_distrib(pair[1], pair[0], bool(val))
-
-                    if len(self.collected_data[str((pair[0], bool(val)))]) > 4:  # minimal size for interventional distributions
-                        expvalpred = self._get_expected_value(predicted_dist)
-                        expvaltrue = self._get_expected_value(est_true_distribution)
-                        losses.append((expvalpred-expvaltrue)**2)
-
-                except ValueError as e:
-                    print(e)
-
-                if did:
-                    ie.reset_do(pair[0])
-
-        if len(losses) == 0:  # all interventional distributions were too small
-            return -2
-        else:
-            return -sum(losses)/len(losses)
-
-    def graph_is_learned(self, threshold: float=None) -> bool:
-        # eval = self.evaluate_causal_model()
-        # print(eval)
-        # return eval > threshold
-        return nx.graph_edit_distance(self.causal_model,
-                                      get_switchboard_causal_graph()) \
-               == 0
 
     def get_graph_state(self) -> List[float]:
         '''
@@ -474,7 +472,7 @@ def get_switchboard_causal_graph() -> StructureModel:
 def get_almost_right_switchboard_causal_graph() -> StructureModel:
     model = StructureModel()
     [model.add_node(name) for name in ['x'+str(i) for i in range(5)]]
-    model.add_edge('x0', 'x1')
+    model.add_edge('x1', 'x0')
     model.add_edge('x2', 'x1')
     model.add_edge('x2', 'x3')
     model.add_edge('x4', 'x0')
