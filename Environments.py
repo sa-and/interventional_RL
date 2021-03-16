@@ -3,7 +3,7 @@ from typing import List, Callable, Tuple, NoReturn, Any
 from gym import Env
 import random
 from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardAgent,\
-    get_switchboard_causal_graph, get_almost_right_switchboard_causal_graph
+    get_switchboard_causal_graph, get_almost_right_switchboard_causal_graph, get_blank_switchboard_causal_graph
 import copy
 import numpy as np
 import networkx as nx
@@ -43,7 +43,7 @@ class Switchboard(Env):
 
     def reset(self) -> np.ndarray:
         self.steps_this_episode = 0
-        self.agent.set_causal_model(get_almost_right_switchboard_causal_graph())
+        self.agent.set_causal_model(get_blank_switchboard_causal_graph())
         # reset observations
         self.old_obs = []
         for i in range(self.agent.state_repeats):
@@ -79,11 +79,14 @@ class Switchboard(Env):
 
         self.agent.store_observation_per_action(self.lights, self.current_action)
 
+        # reverse all wrong edges, this could eventually speed up learning
+        #self.agent.reverse_wrong_edges(0.1)
+
         # determine state after action
         self.last_observation = self.get_obs_vector()
 
         if self.fixed_episode_length:
-            done, reward = self.do_fixed_eval(action_successful, 3)
+            done, reward = self.do_fixed_eval(action_successful, 20)
         else:
             # let the episode end when the causal model is fully learned (loss reaching threshold of -0.006)
             done, reward = self.do_flexible_eval(action_successful)
@@ -121,7 +124,6 @@ class Switchboard(Env):
             reward = -1
         elif learned:
             reward = 30
-            self.agent.display_causal_model()
         # elif very_almost_learned:
         #     reward = 3
         # elif almost_learned:
@@ -158,7 +160,6 @@ class Switchboard(Env):
         #     reward = 3
         elif done:  # the graph has been learned
             reward = 30
-            self.agent.display_causal_model()
             self.reset()
         else:  # intervention, non-intervention, graph-changing
             reward = 0

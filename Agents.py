@@ -51,11 +51,13 @@ class CausalAgent(ABC):
         for p in all_pairs:
             self.update_model(p, random.choice([0, 1, 2]))
 
-    def update_model(self, edge: Tuple[str, str], manipulation: int) -> bool:
+    def update_model(self, edge: Tuple[str, str], manipulation: int, allow_disconnecting: bool = True) -> bool:
         '''Updates model according to action and returns the success of the operation
         0 = remove edge
         1 = add edge
         2 = reverse edge
+
+        allow_disconnecting: False if actions resulting in a disconnected graph should be illegal
         '''
 
         if manipulation == 0:  # remove edge if exists
@@ -68,7 +70,8 @@ class CausalAgent(ABC):
             else:
                 return False
 
-            if nx.number_weakly_connected_components(self.causal_model) > 1:  # disconnected graph
+            # disconnected graph
+            if not allow_disconnecting and nx.number_weakly_connected_components(self.causal_model) > 1:
                 self.causal_model.add_edge(removed_edge[0], removed_edge[1])
                 return False
 
@@ -146,6 +149,20 @@ class CausalAgent(ABC):
             if not self.compare_edge_to_data(e, threshold):
                 count += 1
         return count
+
+    def reverse_wrong_edges(self, threshold: float = 0.0) -> NoReturn:
+        '''
+        Checks all edges whether they are the wrong way around and reverses those that are.
+
+        :param threshold:
+        '''
+        wrong_edges = []
+        for e in self.causal_model.edges:
+            if not self.compare_edge_to_data(e, threshold):
+                wrong_edges.append(e)
+
+        for e in wrong_edges:
+            self.update_model(e, 2)
     
     def edge_is_missing(self, edge: Tuple[str, str], threshold: float = 0.0) -> bool:
         '''
@@ -499,4 +516,10 @@ def get_wrong_switchboard_causal_graph() -> StructureModel:
     model.add_edge('x3', 'x2')
     model.add_edge('x0', 'x4')
     model.add_edge('x2', 'x4')
+    return model
+
+
+def get_blank_switchboard_causal_graph():
+    model = StructureModel()
+    [model.add_node(name) for name in ['x'+str(i) for i in range(5)]]
     return model

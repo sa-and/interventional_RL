@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from stable_baselines.ddpg.policies import MlpPolicy as ddpgMlpPolicy
 from stable_baselines.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise, AdaptiveParamNoiseSpec
 from stable_baselines import DDPG
+from Agents import get_blank_switchboard_causal_graph
 
 
 def create_switchboard_a2c_fixed():
@@ -31,7 +32,7 @@ def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = Fal
         switchboard = venv.DummyVecEnv([create_switchboard_a2c_dynamic for i in range(workers)])
 
     # data collection phase
-    for i in range(50):
+    for i in range(500):
         a = switchboard.envs[0].action_space.sample()
         a = [a for i in range(workers)]
         switchboard.step(a)
@@ -57,7 +58,7 @@ def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = Fal
 
 
 def train_switchboard_dqn(steps: int, fixed_length):
-    agent = DiscreteSwitchboardAgent(5, state_repeats=3)
+    agent = DiscreteSwitchboardAgent(5, state_repeats=3, causal_graph=get_blank_switchboard_causal_graph())
     switchboard = Switchboard(agent, fixed_episode_length=fixed_length)
 
     # data collection phase
@@ -69,7 +70,7 @@ def train_switchboard_dqn(steps: int, fixed_length):
         switchboard.step(a)
 
     model = DQN(dqnMlpPolicy, switchboard,
-                buffer_size=50000,
+                buffer_size=100000,
                 learning_rate=0.001,
                 policy_kwargs={'layers': [90, 50, 45]},
                 exploration_final_eps=0.05,
@@ -110,7 +111,7 @@ def train_switchboard_ddpg(steps: int):
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_a2c(200000, fixed_length=True)
+model, board = train_switchboard_dqn(500000, fixed_length=False)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
-model.save('models/exp7')
+model.save('models/exp9')
