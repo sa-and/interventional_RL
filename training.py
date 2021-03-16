@@ -114,4 +114,4 @@ def train_switchboard_ddpg(steps: int):
 model, board = train_switchboard_dqn(500000, fixed_length=False)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
-model.save('models/exp9')
+model.save('models/exp10')

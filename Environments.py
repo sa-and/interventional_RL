@@ -140,24 +140,21 @@ class Switchboard(Env):
         :return:
         '''
         if self.current_action[0] == 1:  # only check if the model actually changed.
-            done = self.agent.graph_is_learned(threshold=0.1)
-            # almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-            #                                         get_switchboard_causal_graph()) \
-            #                  == 2
-            # very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-            #                                              get_switchboard_causal_graph()) \
-            #                       == 1
+            n_wrong_edges = self.agent.has_wrong_edges(0.1)
+            print('wrong edges: ', n_wrong_edges)
+            n_missing_edges = self.agent.has_missing_edges(0.1)
+            print('missing edges: ', n_missing_edges)
+            done = (n_wrong_edges + n_missing_edges == 0)
+            almost_done = (n_wrong_edges + n_missing_edges <= 4) and (n_wrong_edges + n_missing_edges > 0)
         else:
             done = False
-            # almost_learned = False
-            # very_almost_learned = False
+            almost_done = False
+
         # compute reward
         if not action_successful:  # illegal action was taken
             reward = -1
-        # elif almost_learned:
-        #     reward = 2
-        # elif very_almost_learned:
-        #     reward = 3
+        elif almost_done:
+            reward = 2
         elif done:  # the graph has been learned
             reward = 30
             self.reset()
