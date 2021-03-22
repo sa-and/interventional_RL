@@ -43,7 +43,8 @@ class Switchboard(Env):
 
     def reset(self) -> np.ndarray:
         self.steps_this_episode = 0
-        self.agent.set_causal_model(get_blank_switchboard_causal_graph())
+        # self.agent.set_causal_model(get_blank_switchboard_causal_graph())
+        self.agent.random_reset_causal_model()
         # reset observations
         self.old_obs = []
         for i in range(self.agent.state_repeats):
@@ -109,25 +110,26 @@ class Switchboard(Env):
         :param length_per_episode:
         :return:
         '''
-        done = almost_learned = very_almost_learned = learned = False
+        done = almost_done = very_almost_done = learned = False
         if self.steps_this_episode >= length_per_episode:
             done = True
-            learned = self.agent.graph_is_learned(threshold=0.1)
-            # almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-            #                                         get_switchboard_causal_graph()) \
-            #                  == 2
-            # very_almost_learned = nx.graph_edit_distance(self.agent.causal_model,
-            #                                              get_switchboard_causal_graph()) \
-            #                     == 1
-            print('episode done')
+            n_wrong_edges = self.agent.has_wrong_edges(0.1)
+            print('wrong edges: ', n_wrong_edges)
+            n_missing_edges = self.agent.has_missing_edges(0.1)
+            print('missing edges: ', n_missing_edges)
+            learned = (n_wrong_edges + n_missing_edges == 0)
+            almost_done = (n_wrong_edges + n_missing_edges < 4) and (n_wrong_edges + n_missing_edges >= 2)
+            very_almost_done = (n_wrong_edges + n_missing_edges < 2) and (n_wrong_edges + n_missing_edges > 0)
+
         if not action_successful:  # illegal action was taken
             reward = -1
+        elif almost_done:
+            reward = 2
+        elif very_almost_done:
+            reward = 5
         elif learned:
             reward = 30
-        # elif very_almost_learned:
-        #     reward = 3
-        # elif almost_learned:
-        #     reward = 2
+            self.reset()
         else:
             reward = 0
 
@@ -145,16 +147,21 @@ class Switchboard(Env):
             n_missing_edges = self.agent.has_missing_edges(0.1)
             print('missing edges: ', n_missing_edges)
             done = (n_wrong_edges + n_missing_edges == 0)
-            almost_done = (n_wrong_edges + n_missing_edges <= 4) and (n_wrong_edges + n_missing_edges > 0)
+            almost_done = (n_wrong_edges + n_missing_edges < 4) and (n_wrong_edges + n_missing_edges >= 2)
+            very_almost_done = (n_wrong_edges + n_missing_edges < 2) and (n_wrong_edges + n_missing_edges > 0)
+
         else:
             done = False
             almost_done = False
+            very_almost_done = False
 
         # compute reward
         if not action_successful:  # illegal action was taken
             reward = -1
         elif almost_done:
             reward = 2
+        elif very_almost_done:
+            reward = 5
         elif done:  # the graph has been learned
             reward = 30
             self.reset()
