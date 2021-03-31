@@ -7,6 +7,7 @@ from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardA
 import copy
 import numpy as np
 import networkx as nx
+import matplotlib.pyplot as plt
 
 
 class Switchboard(Env):
@@ -288,6 +289,127 @@ class StructuralCausalModel:
         for interv in interventions:
             self.endogenous_vars[interv[0]] = interv[1]()  # this is probably redundat with the next line
             self.functions[interv[0]] = (interv[1], {})
+
+
+class BoolSCMGenerator:
+    '''
+    Class to help creating SCMs with boolean variables and relationships as in the switchboard environment
+    '''
+
+    def __init__(self, n_endo: int, n_exo: int, allow_exo_confounders: bool = False):
+        self.allow_exo_confounders = allow_exo_confounders
+
+        # create var names
+        self.endo_vars = ['X' + str(i) for i in range(n_endo)]
+        self.exo_vars = ['U' + str(i) for i in range(n_exo)]
+
+        # determine potential causes for each endogenous var
+        self.potential_causes = {}
+        exo_copy = copy.deepcopy(self.exo_vars)
+        for v in self.endo_vars:
+            if allow_exo_confounders:
+                self.potential_causes[v] = self.endo_vars + self.exo_vars
+            else:
+                self.potential_causes[v] = self.endo_vars + [exo_copy.pop()]
+            self.potential_causes[v].remove(v)
+
+    def create_random(self) -> StructuralCausalModel:
+        # get random causes
+        # causes = {}
+        # for key, cs in self.potential_causes.items():
+        #     causes[key] = random.sample(cs, random.randint(1, len(cs)))
+        #
+        # # functions = {}
+        # # for v in causes:
+        # #     def function(**cs):
+        # #         ret = False
+        # #         for c in causes[v]:
+        # #             ret = ret or cs[c]
+        # #         return ret
+        # #     functions[v] = lambda **cs: any(cs[c] for c in causes[v])
+        # # pass
+        # #
+        # scm = StructuralCausalModel()
+        # functions = []
+        # for v in causes:
+        #     functions.append(lambda **kwargs: any([kwargs[c] for c in causes[v]]))
+        #     scm.add_endogenous_var(v, False, copy.deepcopy(lambda **cs: any(cs[c] for c in causes[v])), {c:c for c in causes[v]})
+        #
+        # return scm
+        # # ('X0', False, lambda x4, u0: x4 or u0, {'x4': 'X4', 'u0': 'U0'})
+
+        ##########################
+        # causes = {u: [] for u in self.endo_vars}
+        # # select random exo vars
+        # exos = random.sample(self.exo_vars, random.randint(0, len(self.exo_vars)))
+        # remaining = copy.deepcopy(self.endo_vars)
+        # processed = []
+        #
+        # # Determine which nodes can still be roots
+        # previous_layer = []
+        # possible_roots = [r for r in remaining]
+        # for u in exos:
+        #     for v in self.endo_vars:
+        #         if v[-1] == u[-1]:
+        #             possible_roots.remove(v)
+        #             previous_layer.append(v)
+        #             causes[v].append(u)
+        #
+        # # randomly select roots
+        # roots = random.sample(possible_roots, random.randint(0, len(possible_roots)))
+        # previous_layer.extend(roots)
+        # [remaining.remove(r) for r in previous_layer]
+        #
+        # while len(remaining) > 0:
+        #     next_layer = random.sample(remaining, random.randint(1, len(remaining)))
+        #     prev_new = [n for n in next_layer]
+        #     for n in next_layer:
+        #         parents = random.sample(previous_layer + next_layer,
+        #                                 random.randint(1, len(previous_layer + next_layer)))
+        #         if n in parents:
+        #             parents.remove(n)
+        #         next_layer.remove(n)
+        #         causes[n].extend(parents)
+        #     previous_layer = prev_new
+        #     [remaining.remove(p) for p in previous_layer]
+
+        # generate fully connected graph
+        graph = nx.DiGraph()
+        [graph.add_node(u) for u in self.exo_vars]
+        [graph.add_node(v) for v in self.endo_vars]
+        for n, cs in self.potential_causes.items():
+            [graph.add_edge(c, n) for c in cs]
+            
+        # delete random edges until acyclic
+        while not nx.is_directed_acyclic_graph(graph):
+            random_edge = random.sample(graph.edges, 1)[0]
+            graph.remove_edge(random_edge[0], random_edge[1])
+
+        fig, ax = plt.subplots()
+        nx.draw_circular(graph, ax=ax, with_labels=True)
+        fig.show()
+
+        # create scm
+        scm = StructuralCausalModel()
+        for n in graph.nodes:
+            parents = [p for p in graph.predecessors(n)]
+
+            def make_f(parents):
+                def f(**kwargs):
+                    res = False
+                    for p in parents:
+                        res = res or kwargs[p]
+                    return res
+                return f
+
+            if n[0] == 'X':
+                scm.add_endogenous_var(n, False, make_f(parents), {p:p for p in parents})
+            else:
+                scm.add_exogenous_var(n, False, random.choice, {'seq': [True, False]})
+        return scm
+
+    def create_n(self, n: int) -> StructuralCausalModel:
+        pass
 
 
 def make_switchboard_scm_with_context():
