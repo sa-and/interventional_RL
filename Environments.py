@@ -34,6 +34,7 @@ class Switchboard(Env):
             self.current_action = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.observation_space = self.agent.observation_space
         self.prev_action = None
+        self.last_observation = None
         self.old_obs = []
         for i in range(self.agent.state_repeats):
             self.old_obs.append([0.0 for i in range(int(self.observation_space.shape[0]/self.agent.state_repeats))])
@@ -101,13 +102,16 @@ class Switchboard(Env):
 
         return self.last_observation, reward, done, {}
 
-    def do_fixed_eval(self, action_successful: bool, length_per_episode: int) -> Tuple[bool, float]:
+    def do_fixed_eval(self, action_successful: bool,
+                      length_per_episode: int,
+                      allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
         '''
         Ends the episode after 'length_per_episode' steps. Here we only give a reward for the
         achievement of the goal at the end of each episode. A negative reward for illegal actions
         is still returned.
         :param action_successful:
         :param length_per_episode:
+        :param allow_unsuccessful_actions:
         :return:
         '''
         done = almost_done = very_almost_done = learned = False
@@ -121,7 +125,7 @@ class Switchboard(Env):
             almost_done = (n_wrong_edges + n_missing_edges < 4) and (n_wrong_edges + n_missing_edges >= 2)
             very_almost_done = (n_wrong_edges + n_missing_edges < 2) and (n_wrong_edges + n_missing_edges > 0)
 
-        if not action_successful:  # illegal action was taken
+        if not action_successful and not allow_unsuccessful_actions:  # illegal action was taken
             reward = -1
         elif almost_done:
             reward = 2
@@ -135,10 +139,11 @@ class Switchboard(Env):
 
         return done, reward
 
-    def do_flexible_eval(self, action_successful: bool) -> Tuple[bool, float]:
+    def do_flexible_eval(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
         '''
         Ends the episode whenever a graph-altering action is performed
         :param action_successful:
+        :param allow_unsuccessful_actions:
         :return:
         '''
         if self.current_action[0] == 1:  # only check if the model actually changed.
@@ -156,7 +161,7 @@ class Switchboard(Env):
             very_almost_done = False
 
         # compute reward
-        if not action_successful:  # illegal action was taken
+        if not action_successful and not allow_unsuccessful_actions:  # illegal action was taken
             reward = -1
         elif almost_done:
             reward = 2

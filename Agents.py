@@ -51,7 +51,10 @@ class CausalAgent(ABC):
         for p in all_pairs:
             self.update_model(p, random.choice([0, 1, 2]))
 
-    def update_model(self, edge: Tuple[str, str], manipulation: int, allow_disconnecting: bool = True) -> bool:
+    def update_model(self, edge: Tuple[str, str],
+                     manipulation: int,
+                     allow_disconnecting: bool = True,
+                     allow_cycles: bool = True) -> bool:
         '''Updates model according to action and returns the success of the operation
         0 = remove edge
         1 = add edge
@@ -81,7 +84,7 @@ class CausalAgent(ABC):
             else:
                 return False
 
-            if not nx.is_directed_acyclic_graph(self.causal_model):  # check if became cyclic
+            if not nx.is_directed_acyclic_graph(self.causal_model) and not allow_cycles:  # check if became cyclic
                 self.causal_model.remove_edge(edge[0], edge[1])
                 return False
 
@@ -97,7 +100,7 @@ class CausalAgent(ABC):
             else:
                 return False
 
-            if not nx.is_directed_acyclic_graph(self.causal_model):  # check if became cyclic
+            if not nx.is_directed_acyclic_graph(self.causal_model) and not allow_cycles:  # check if became cyclic
                 self.causal_model.remove_edge(added_edge[0], added_edge[1])
                 self.causal_model.add_edge(added_edge[1], added_edge[0])
                 return False

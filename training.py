@@ -14,13 +14,13 @@ from Agents import get_blank_switchboard_causal_graph
 
 
 def create_switchboard_a2c_fixed():
-    agent = ContinuousSwitchboardAgent(5)
+    agent = DiscreteSwitchboardAgent(5)
     a = Switchboard(agent, fixed_episode_length=True)
     return a
 
 
 def create_switchboard_a2c_dynamic():
-    agent = ContinuousSwitchboardAgent(5)
+    agent = DiscreteSwitchboardAgent(5)
     a = Switchboard(agent, fixed_episode_length=False)
     return a
 
@@ -40,13 +40,13 @@ def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = Fal
 
     model = A2C(MlpLstmPolicy, switchboard,
                 learning_rate=0.0001,
-                policy_kwargs={'net_arch': [100,
+                policy_kwargs={'net_arch': [50,
                                             'lstm',
-                                            {'pi': [15],
+                                            {'pi': [50],
                                              'vf': [10]}],
-                               'n_lstm': 100},
+                               'n_lstm': 20},
                 epsilon=0.05,
-                n_steps=20,
+                n_steps=5,
                 n_cpu_tf_sess=8)
 
     model.learn(steps)
@@ -58,7 +58,7 @@ def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = Fal
 
 
 def train_switchboard_dqn(steps: int, fixed_length):
-    agent = DiscreteSwitchboardAgent(5, state_repeats=4, causal_graph=get_blank_switchboard_causal_graph())
+    agent = DiscreteSwitchboardAgent(5, state_repeats=3, causal_graph=get_blank_switchboard_causal_graph())
     switchboard = Switchboard(agent, fixed_episode_length=fixed_length)
 
     # data collection phase
@@ -72,7 +72,7 @@ def train_switchboard_dqn(steps: int, fixed_length):
     model = DQN(dqnMlpPolicy, switchboard,
                 buffer_size=200000,
                 learning_rate=0.001,
-                policy_kwargs={'layers': [150, 60, 45]},
+                policy_kwargs={'layers': [80, 45]},
                 exploration_final_eps=0.05,
                 batch_size=64,
                 n_cpu_tf_sess=8)
@@ -110,7 +110,7 @@ def train_switchboard_ddpg(steps: int):
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_a2c(4000000, fixed_length=True)
+model, board = train_switchboard_a2c(400000, fixed_length=False)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
-model.save('models/exp13')
+model.save('models/exp16')
