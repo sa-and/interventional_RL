@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import random
 import stable_baselines.common.vec_env as venv
 import networkx as nx
-nx.utils
+import dill
 
 from Agents import ContinuousSwitchboardAgent, DiscreteSwitchboardAgent, get_almost_right_switchboard_causal_graph
 from Environments import BoolSCMGenerator
@@ -25,6 +25,8 @@ env = Switchboard(agent)
 # print(agent.has_missing_edges(0.1))
 
 gen = BoolSCMGenerator(5, 5)
-scm = gen.create_random()
-for i in range(10):
-    print(scm.get_next_instantiation())
+scms = gen.create_n(600000)
+with open('data/scms/switchboard/5x5var_all.pkl', 'wb') as file:
+    dill.dump(scms, file)
+
+print()

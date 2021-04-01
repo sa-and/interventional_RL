@@ -144,7 +144,7 @@ def train_switchboard_ddpg(steps: int):
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_dqn(200000, fixed_length=False)
+model, board = train_switchboard_dqn(500000, fixed_length=False)
 model.save('experiments/actual/exp1/model')
 with open('experiments/actual/exp1/metrics.pkl', 'wb') as f:
     pickle.dump(board.metrics, f, pickle.HIGHEST_PROTOCOL)
