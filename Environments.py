@@ -17,6 +17,8 @@ class Switchboard(Env):
 
     def __init__(self, agent: CausalAgent, fixed_episode_length: bool = False):
         super(Switchboard, self).__init__()
+        self.metrics = {'ep_lengths': [],
+                        'rewards': []}
         self.fixed_episode_length = fixed_episode_length
 
         # initialize causal model
@@ -40,7 +42,6 @@ class Switchboard(Env):
         for i in range(self.agent.state_repeats):
             self.old_obs.append([0.0 for i in range(int(self.observation_space.shape[0]/self.agent.state_repeats))])
 
-        self.rewards = []
         self.steps_this_episode = 0
 
     def reset(self) -> np.ndarray:
@@ -63,13 +64,6 @@ class Switchboard(Env):
         if self.current_action[0] == 0:  # intervention action
             interv_scm.do_interventions([('X'+str(self.current_action[1]), lambda: self.current_action[2])])
             action_successful = True
-        # elif self.current_action[0] == 1 and self.current_action[-1] == 2 and self.prev_action[-1] == 2:  # don't allow reversal of edge that has just been reversed
-        #     if type(self.agent) == DeterministicSwitchboardAgent and self.current_action[1] == self.prev_action[1]:
-        #         action_successful = False
-        #     elif type(self.agent) == ContinuousSwitchboardAgent and\
-        #             self.current_action[3] == self.prev_action[3] and\
-        #             self.current_action[4] == self.prev_action[4]:
-        #         action_successful = False
         elif self.current_action[0] == 1:
             action_successful = self.agent.update_model_per_action(self.current_action)
         elif self.current_action[0] == None or self.current_action[0] == -1:
@@ -95,7 +89,7 @@ class Switchboard(Env):
             done, reward = self.do_flexible_eval(action_successful)
 
         self.prev_action = self.current_action
-        self.rewards.append(reward)
+        self.metrics['rewards'].append(reward)
         if type(self.agent) == ContinuousSwitchboardAgent:
             print([round(a) for a in self.current_action], '\treward', reward)
         else:
@@ -119,9 +113,7 @@ class Switchboard(Env):
         if self.steps_this_episode >= length_per_episode:
             done = True
             n_wrong_edges = self.agent.has_wrong_edges(0.1)
-            print('wrong edges: ', n_wrong_edges)
             n_missing_edges = self.agent.has_missing_edges(0.1)
-            print('missing edges: ', n_missing_edges)
             learned = (n_wrong_edges + n_missing_edges == 0)
             almost_done = (n_wrong_edges + n_missing_edges < 4) and (n_wrong_edges + n_missing_edges >= 2)
             very_almost_done = (n_wrong_edges + n_missing_edges < 2) and (n_wrong_edges + n_missing_edges > 0)
@@ -149,9 +141,7 @@ class Switchboard(Env):
         '''
         if self.current_action[0] == 1:  # only check if the model actually changed.
             n_wrong_edges = self.agent.has_wrong_edges(0.1)
-            print('wrong edges: ', n_wrong_edges)
             n_missing_edges = self.agent.has_missing_edges(0.1)
-            print('missing edges: ', n_missing_edges)
             done = (n_wrong_edges + n_missing_edges == 0)
             almost_done = (n_wrong_edges + n_missing_edges < 4) and (n_wrong_edges + n_missing_edges >= 2)
             very_almost_done = (n_wrong_edges + n_missing_edges < 2) and (n_wrong_edges + n_missing_edges > 0)
@@ -170,6 +160,7 @@ class Switchboard(Env):
             reward = 5
         elif done:  # the graph has been learned
             reward = 30
+            self.metrics['ep_lengths'].append(self.steps_this_episode)
             self.reset()
         else:  # intervention, non-intervention, graph-changing
             reward = 0

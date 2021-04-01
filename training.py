@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from stable_baselines.ddpg.policies import MlpPolicy as ddpgMlpPolicy
 from stable_baselines.common.noise import NormalActionNoise
 from Agents import get_blank_switchboard_causal_graph
+import pickle
 
 
 def create_switchboard_a2c_fixed():
@@ -53,7 +54,7 @@ def train_switchboard_acer(steps: int, workers: int = 8, fixed_length: bool = Fa
     model.learn(steps)
     title = 'ACER, discrete agnt, fixed = ' + str(fixed_length)
     plt.title(title)
-    plt.plot(switchboard.envs[0].rewards)
+    plt.plot(switchboard.envs[0].metrics['rewards'])
     plt.show()
     return model, switchboard
 
@@ -85,13 +86,13 @@ def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = Fal
     model.learn(steps)
     title = 'A2C, cont agnt, fixed = ' + str(fixed_length)
     plt.title(title)
-    plt.plot(switchboard.envs[0].rewards)
+    plt.plot(switchboard.envs[0].metrics['rewards'])
     plt.show()
     return model, switchboard
 
 
 def train_switchboard_dqn(steps: int, fixed_length):
-    agent = DiscreteSwitchboardAgent(5, state_repeats=3, causal_graph=get_blank_switchboard_causal_graph())
+    agent = DiscreteSwitchboardAgent(5, state_repeats=4, causal_graph=get_blank_switchboard_causal_graph())
     switchboard = Switchboard(agent, fixed_episode_length=fixed_length)
 
     # data collection phase
@@ -105,7 +106,7 @@ def train_switchboard_dqn(steps: int, fixed_length):
     model = DQN(dqnMlpPolicy, switchboard,
                 buffer_size=200000,
                 learning_rate=0.001,
-                policy_kwargs={'layers': [80, 45]},
+                policy_kwargs={'layers': [120, 100, 60]},
                 exploration_final_eps=0.05,
                 batch_size=64,
                 n_cpu_tf_sess=8)
@@ -114,7 +115,7 @@ def train_switchboard_dqn(steps: int, fixed_length):
 
     title = 'DQN, fixed = ' + str(fixed_length)
     plt.title(title)
-    plt.plot(switchboard.rewards)
+    plt.plot(switchboard.metrics['rewards'])
     plt.show()
     return model, switchboard
 
@@ -137,12 +138,19 @@ def train_switchboard_ddpg(steps: int):
     model.learn(steps)
 
     plt.title('ddpg')
-    plt.plot(switchboard.rewards)
+    plt.plot(switchboard.metrics['rewards'])
     plt.show()
     return model, switchboard
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_acer(400000, fixed_length=False)
+model, board = train_switchboard_dqn(200000, fixed_length=False)
+model.save('experiments/actual/exp1/model')
+with open('experiments/actual/exp1/metrics.pkl', 'wb') as f:
+    pickle.dump(board.metrics, f, pickle.HIGHEST_PROTOCOL)
+# with open('experiments/actual/exp1/metrics.pkl', 'rb') as f:
+#     dic = pickle.load(f)
+#
+# print(dic)
 #model = DQN.load('models/exp3.zip', swtchbrd)
 
