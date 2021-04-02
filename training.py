@@ -92,7 +92,7 @@ def train_switchboard_a2c(steps: int, workers: int = 8, fixed_length: bool = Fal
 
 
 def train_switchboard_dqn(steps: int, fixed_length):
-    agent = DiscreteSwitchboardAgent(5, state_repeats=4, causal_graph=get_blank_switchboard_causal_graph())
+    agent = DiscreteSwitchboardAgent(5, state_repeats=3, causal_graph=get_blank_switchboard_causal_graph())
     switchboard = Switchboard(agent, fixed_episode_length=fixed_length)
 
     # data collection phase
@@ -106,7 +106,7 @@ def train_switchboard_dqn(steps: int, fixed_length):
     model = DQN(dqnMlpPolicy, switchboard,
                 buffer_size=200000,
                 learning_rate=0.001,
-                policy_kwargs={'layers': [120, 100, 60]},
+                policy_kwargs={'layers': [80, 60]},
                 exploration_final_eps=0.05,
                 batch_size=64,
                 n_cpu_tf_sess=8)
@@ -145,8 +145,8 @@ def train_switchboard_ddpg(steps: int):
 #check = check_env(swtchbrd)
 
 model, board = train_switchboard_dqn(500000, fixed_length=False)
-model.save('experiments/actual/exp1/model')
-with open('experiments/actual/exp1/metrics.pkl', 'wb') as f:
+model.save('experiments/preliminary/exp15/model')
+with open('experiments/preliminary/exp15/metrics.pkl', 'wb') as f:
     pickle.dump(board.metrics, f, pickle.HIGHEST_PROTOCOL)
 # with open('experiments/actual/exp1/metrics.pkl', 'rb') as f:
 #     dic = pickle.load(f)

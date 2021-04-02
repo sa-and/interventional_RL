@@ -24,9 +24,9 @@ env = Switchboard(agent)
 #
 # print(agent.has_missing_edges(0.1))
 
-gen = BoolSCMGenerator(5, 5)
-scms = gen.create_n(600000)
-with open('data/scms/switchboard/5x5var_all.pkl', 'wb') as file:
+gen = BoolSCMGenerator(6, 0)
+scms = gen.create_n(200000)
+with open('data/scms/switchboard/6x0var_200000.pkl', 'wb') as file:
     dill.dump(scms, file)
 
 print()

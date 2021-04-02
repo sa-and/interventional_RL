@@ -24,7 +24,7 @@ class Switchboard(Env):
         self.fixed_episode_length = fixed_episode_length
 
         # initialize causal model
-        self.SCM = make_switchboard_scm_with_context()
+        self.SCM = make_switchboard_scm_without_context()
 
         self.lights = [False]*5  # all lights are off
 
@@ -303,7 +303,10 @@ class BoolSCMGenerator:
             if allow_exo_confounders:
                 self.potential_causes[v] = self.endo_vars + self.exo_vars
             else:
-                self.potential_causes[v] = self.endo_vars + [exo_copy.pop()]
+                if not len(exo_copy) == 0:
+                    self.potential_causes[v] = self.endo_vars + [exo_copy.pop()]
+                else:
+                    self.potential_causes[v] = self.endo_vars + []
             self.potential_causes[v].remove(v)
 
         self.fully_connected_graph = self._make_fully_connected_dag()
@@ -325,10 +328,6 @@ class BoolSCMGenerator:
             removed_edges.add(random_edge)
             graph.remove_edge(random_edge[0], random_edge[1])
 
-        fig, ax = plt.subplots()
-        nx.draw_circular(graph, ax=ax, with_labels=True)
-        fig.show()
-
         # create scm
         return self._create_scm_from_graph(graph), removed_edges
 
@@ -348,8 +347,8 @@ class BoolSCMGenerator:
         rem_edges_list = []
         resampled = 0
         print('Creating SCMs...')
-        pbar = tqdm(total=n)
-        while len(scms) < n:
+        pbar = tqdm(total=n-1)
+        while len(scms) < n-1:
             scm, rem_edges = self.create_random()
             if any([rem_edges == other for other in rem_edges_list]):
                 resampled += 1
