@@ -39,18 +39,18 @@ def train_switchboard_acer(steps: int, workers: int = 8, fixed_length: bool = Fa
     print('data collection phase done\n\n\n\n\n\n\n\n\n\n')
 
     model = ACER(MlpLstmPolicy, switchboard,
-                 policy_kwargs={'net_arch': [50,
+                 policy_kwargs={'net_arch': [30,
                                              'lstm',
                                              {'pi': [50],
                                               'vf': [10]}],
-                                'n_lstm': 20},
+                                'n_lstm': 100},
 
-                 n_steps=5,
+                 n_steps=50,
                  n_cpu_tf_sess=8,
-                 replay_ratio=10,
-                 buffer_size=50000
+                 replay_ratio=5,
+                 buffer_size=500000
                  )
-
+    model = ACER.load('experiments/preliminary/exp19/model.zip', switchboard)
     model.learn(steps)
     title = 'ACER, discrete agnt, fixed = ' + str(fixed_length)
     plt.title(title)
@@ -144,11 +144,11 @@ def train_switchboard_ddpg(steps: int):
 
 #check = check_env(swtchbrd)
 
-model, board = train_switchboard_dqn(500000, fixed_length=False)
-model.save('experiments/preliminary/exp15/model')
-with open('experiments/preliminary/exp15/metrics.pkl', 'wb') as f:
-    pickle.dump(board.metrics, f, pickle.HIGHEST_PROTOCOL)
-# with open('experiments/actual/exp1/metrics.pkl', 'rb') as f:
+model, board = train_switchboard_acer(100, fixed_length=True)
+model.save('experiments/actual/exp1/model')
+with open('experiments/actual/exp1/metrics.pkl', 'wb') as f:
+    pickle.dump(board.envs[0].metrics, f, pickle.HIGHEST_PROTOCOL)
+# with open('experiments/preliminary/exp15/metrics.pkl', 'rb') as f:
 #     dic = pickle.load(f)
 #
 # print(dic)
