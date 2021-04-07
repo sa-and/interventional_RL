@@ -6,6 +6,7 @@ from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardA
 import copy
 import numpy as np
 from scm import StructuralCausalModel, BoolSCMGenerator
+import random
 
 
 class Switchboard(Env):
@@ -133,7 +134,6 @@ class Switchboard(Env):
             reward = 5
         elif learned:
             reward = 30
-            self.agent.display_causal_model()
             self.reset()
         else:
             reward = 0
@@ -200,4 +200,17 @@ class Switchboard(Env):
                     out += '*'
                 out += '\t'
             print(out)
+
+
+class ReservoirSwitchboard(Switchboard):
+    """Same as Switchboard only that a new scm is loaded after each episode"""
+    def __init__(self, reservoir: List[StructuralCausalModel],
+                 agent: CausalAgent,
+                 fixed_episode_length: bool = False):
+        super(ReservoirSwitchboard, self).__init__(agent, scm=reservoir[0], fixed_episode_length=fixed_episode_length)
+        self.scm_reservoir = reservoir
+
+    def reset(self):
+        self.SCM = random.sample(self.scm_reservoir, 1)[0]
+        return super(ReservoirSwitchboard, self).reset()
 

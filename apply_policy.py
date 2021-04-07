@@ -24,7 +24,7 @@ def load_policy(path, env, algo='ACER'):
         raise NotImplementedError
 
 
-model_path = f'experiments/preliminary/exp19/model.zip'
+model_path = f'experiments/actual/exp1/model.zip'
 switchboard = venv.DummyVecEnv([create_switchboard_acer_fixed for i in range(8)])
 obs = switchboard.reset()
 model = load_policy(model_path, switchboard)
@@ -32,9 +32,10 @@ state = None
 done = [False for _ in range(8)]
 for i in range(50):
     print(switchboard.envs[0].observation)
-    action, state = model.predict(obs, state=state, deterministic=True, mask=done)
-    # print(agent.get_action_from_actionspace_sample(action[0]))
-    obs, _, done, _ = switchboard.step(action)
+    actions, state = model.predict(obs, state=state, deterministic=True, mask=done)
+    print(switchboard.envs[0].agent.get_action_from_actionspace_sample(actions[0]))
+    obs, _, done, _ = switchboard.step(actions)
+    switchboard.envs[0].agent.display_causal_model()
     switchboard.envs[0].render()
     print()
 print(done)
