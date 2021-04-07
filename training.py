@@ -12,7 +12,7 @@ from stable_baselines.ddpg.policies import MlpPolicy as ddpgMlpPolicy
 from stable_baselines.common.noise import NormalActionNoise
 from Agents import get_blank_switchboard_causal_graph
 import pickle
-from scm import StructuralCausalModel
+from scm import StructuralCausalModel, BoolSCMGenerator
 from tqdm import tqdm
 
 
@@ -192,21 +192,31 @@ def train_switchboard_acer(steps: int,
                            discrete_agent: bool = True,
                            load_model_path: str = None,
                            workers: int = 1):
-
-    assert workers == 1, 'Not Implemented: For multiprocessing the environment/agent structure must be changed.'
-    if workers > 1:
-        # create all training environments in _workers_ parallel processes
-        stepsize = int(len(train_scms)/workers)
-        switchboard = venv.SubprocVecEnv([make_res_switchboard_constructor(scms=train_scms[w:(w+stepsize)],
-                                                                           n_switches=5,
-                                                                           fixed_length=fixed_length,
-                                                                           discrete_agent=discrete_agent)
+    # possibly set up multiprocessing environments
+    if len(train_scms) == 1:
+        # create all workers with the same environment
+        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[0], 5, fixed_length, discrete_agent)
                                          for w in range(workers)],
                                          start_method='spawn')
-
-    else:
+    elif len(train_scms) <= workers:
+        # start each worker with a different environment
+        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(s, 5, fixed_length, discrete_agent)
+                                          for s in train_scms],
+                                         start_method='spawn')
+    if len(train_scms) > workers:
+        # no multiprocessing. For possible implementation see below
         switchboard = venv.DummyVecEnv([make_switchboard_constructor(s, 5, fixed_length, discrete_agent)
-                                        for s in train_scms])
+                                        for s in range(len(train_scms))])
+
+        # this part needs to be implemented properly for multiprocessing
+        # create all training environments in _workers_ parallel processes
+        # stepsize = int(len(train_scms) / workers)
+        # switchboard = venv.SubprocVecEnv([make_res_switchboard_constructor(scms=train_scms[w:(w + stepsize)],
+        #                                                                    n_switches=5,
+        #                                                                    fixed_length=fixed_length,
+        #                                                                    discrete_agent=discrete_agent)
+        #                                   for w in range(workers)],
+        #                                  start_method='spawn')
 
     # data collection phase in order to approximate the distribution correctly
     for i in tqdm(range(300)):
@@ -221,9 +231,9 @@ def train_switchboard_acer(steps: int,
     # Create new model
     else:
         model = ACER(MlpLstmPolicy, switchboard,
-                     policy_kwargs={'net_arch': [30,
+                     policy_kwargs={'net_arch': [40,
                                                  'lstm',
-                                                 {'pi': [50],
+                                                 {'pi': [80],
                                                   'vf': [10]}],
                                     'n_lstm': 100},
 
@@ -254,7 +264,7 @@ if __name__ == '__main__':
                                           train_scms=scms_train,
                                           fixed_length=True,
                                           discrete_agent=True,
-                                          load_model_path=model_save_path+'model.zip')
+                                          workers=5)
 
     model.save(model_save_path + 'model')
     # with open(model_save_path + 'metrics.pkl', 'wb') as f:
