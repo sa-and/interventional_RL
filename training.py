@@ -174,13 +174,15 @@ def make_res_switchboard_constructor(scms: List[StructuralCausalModel],
 def make_switchboard_constructor(scm: StructuralCausalModel,
                                  n_switches: int,
                                  fixed_length: bool = True,
-                                 discrete_agent: bool = True):
+                                 discrete_agent: bool = True,
+                                 seed: int = 0):
     def make_switchboard_env():
         if discrete_agent:
             agent = DiscreteSwitchboardAgent(n_switches)
         else:
             agent = ContinuousSwitchboardAgent(n_switches)
         switchboard = Switchboard(agent=agent, scm=scm, fixed_episode_length=fixed_length)
+        switchboard.seed(seed)
         return switchboard
 
     return make_switchboard_env
@@ -195,14 +197,16 @@ def train_switchboard_acer(steps: int,
     # possibly set up multiprocessing environments
     if len(train_scms) == 1:
         # create all workers with the same environment
-        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[0], 5, fixed_length, discrete_agent)
+        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[0], 5, fixed_length, discrete_agent, w)
                                          for w in range(workers)],
                                          start_method='spawn')
+
     elif len(train_scms) <= workers:
         # start each worker with a different environment
-        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(s, 5, fixed_length, discrete_agent)
-                                          for s in train_scms],
+        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[i], 5, fixed_length, discrete_agent, i)
+                                          for i in range(len(train_scms))],
                                          start_method='spawn')
+
     if len(train_scms) > workers:
         # no multiprocessing. For possible implementation see below
         switchboard = venv.DummyVecEnv([make_switchboard_constructor(s, 5, fixed_length, discrete_agent)
@@ -219,7 +223,7 @@ def train_switchboard_acer(steps: int,
         #                                  start_method='spawn')
 
     # data collection phase in order to approximate the distribution correctly
-    for i in tqdm(range(300)):
+    for i in tqdm(range(1500)):
         a = [switchboard.action_space.sample() for i in range(switchboard.num_envs)]#[[switchboard.envs[i].envs[j].action_space.sample() for j in range(len(switchboard.envs[i].num_envs))] for i in range(switchboard.num_envs)]
         switchboard.step(a)
     print('data collection phase done\n\n\n\n\n\n\n\n\n\n')
@@ -246,25 +250,27 @@ def train_switchboard_acer(steps: int,
     model.learn(steps)
 
     # plot rewards of first environment for debugging
-    title = 'ACER, discrete agnt, fixed = ' + str(fixed_length)
-    plt.title(title)
-    plt.plot(switchboard.envs[0].metrics['rewards'])
-    plt.show()
+    #title = 'ACER, discrete agnt, fixed = ' + str(fixed_length)
+    #plt.title(title)
+    #plt.plot(switchboard.envs[0].metrics['rewards'])
+    #plt.show()
 
     return model, switchboard
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exp2/'
+    model_save_path = 'experiments/actual/exp2'
 
     # load train and test set
     scms = load_dataset('data/scms/switchboard/5x0var_25000.pkl')
-    scms_train = scms[:5]
-    model, board = train_switchboard_acer(3000000,
+    scms_train = scms[:2]
+    scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]
+    model, board = train_switchboard_acer(500000,
                                           train_scms=scms_train,
                                           fixed_length=True,
                                           discrete_agent=True,
-                                          workers=5)
+                                          workers=6,
+                                          load_model_path=None)
 
     model.save(model_save_path + 'model')
     # with open(model_save_path + 'metrics.pkl', 'wb') as f:

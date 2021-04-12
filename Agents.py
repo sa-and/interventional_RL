@@ -134,7 +134,7 @@ class CausalAgent(ABC):
         if '(' + edge[0] + ',True)' in self.collected_data and '(' + edge[0] + ',False)' in self.collected_data:
             est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
 
-            if est_causal_effect >= threshold:
+            if abs(est_causal_effect) >= threshold:
                 return True
             else:
                 return False

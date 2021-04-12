@@ -59,8 +59,11 @@ class StructuralCausalModel:
         random.seed()
         # update exogenous vars
         for key in self.exogenous_vars:
-            dist = self.exogenous_distributions[key]
-            self.exogenous_vars[key] = dist[0](**dist[1])
+            self.exogenous_vars[key] = random.choice([True, False])
+            # TODO: understand why parametrized version below produces always the same sequence
+            # dist = self.exogenous_distributions[key]
+            # res = dist[0](**dist[1])
+            # self.exogenous_vars[key] = res
 
         # update endogenous vars until converge
         while True:
