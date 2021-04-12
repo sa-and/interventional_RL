@@ -67,9 +67,9 @@ class CausalAgent(ABC):
             if self.causal_model.has_edge(edge[0], edge[1]):
                 self.causal_model.remove_edge(edge[0], edge[1])
                 removed_edge = (edge[0], edge[1])
-            elif self.causal_model.has_edge(edge[1], edge[0]):
-                self.causal_model.remove_edge(edge[1], edge[0])
-                removed_edge = (edge[1], edge[0])
+            # elif self.causal_model.has_edge(edge[1], edge[0]):
+            #     self.causal_model.remove_edge(edge[1], edge[0])
+            #     removed_edge = (edge[1], edge[0])
             else:
                 return False
 
@@ -93,10 +93,10 @@ class CausalAgent(ABC):
                 self.causal_model.remove_edge(edge[0], edge[1])
                 self.causal_model.add_edge(edge[1], edge[0])
                 added_edge = (edge[1], edge[0])
-            elif self.causal_model.has_edge(edge[1], edge[0]):
-                self.causal_model.remove_edge(edge[1], edge[0])
-                self.causal_model.add_edge(edge[0], edge[1])
-                added_edge = edge
+            # elif self.causal_model.has_edge(edge[1], edge[0]):
+            #     self.causal_model.remove_edge(edge[1], edge[0])
+            #     self.causal_model.add_edge(edge[0], edge[1])
+            #     added_edge = edge
             else:
                 return False
 
@@ -134,7 +134,7 @@ class CausalAgent(ABC):
         if '(' + edge[0] + ',True)' in self.collected_data and '(' + edge[0] + ',False)' in self.collected_data:
             est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
 
-            if est_causal_effect >= threshold:
+            if abs(est_causal_effect) >= threshold:
                 return True
             else:
                 return False
@@ -387,6 +387,7 @@ class DiscreteSwitchboardAgent(CausalAgent):
         # actions for graph manipulation represented as (1, edge, operation)
         # where operation can be one of: delete = 0, add = 1, reverse = 2
         edges = [e for e in combinations(self.var_names, 2)]
+        edges.extend([(e[1], e[0]) for e in edges])
         for i in range(3):
             extensions = [(1, edge, i) for edge in edges]
             self.actions.extend([(1, edge, i) for edge in edges])
