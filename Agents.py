@@ -1,8 +1,6 @@
 from typing import Tuple, List, Optional, NoReturn, Union, Any
 from abc import ABC, abstractmethod
 from causalnex.structure import StructureModel
-from causalnex.network import BayesianNetwork
-from causalnex.inference import InferenceEngine
 import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
@@ -41,6 +39,7 @@ class CausalAgent(ABC):
         self.observation_space = None
         self.actions = []
         self.state_repeats = None
+        self.current_action = None
 
     def set_causal_model(self, causal_model: StructureModel):
         self.causal_model = causal_model
@@ -271,7 +270,7 @@ class CausalAgent(ABC):
             self.collected_data[key] = obs_dict
 
     @abstractmethod
-    def store_observation_per_action(self, obs: List[Any], action: Any):
+    def store_observation_per_action(self, obs: List[Any]):
         raise NotImplementedError
 
     def get_est_cond_distr(self, query: str, var: str, val: Any) -> DataFrame:
@@ -400,16 +399,17 @@ class DiscreteSwitchboardAgent(CausalAgent):
             extensions = [(1, edge, i) for edge in edges]
             self.actions.extend([(1, edge, i) for edge in edges])
         self.actions.append((None, None, None))
+        self.current_action = (None, None, None)
 
         self.action_space = Discrete(len(self.actions))
         self.state_repeats = state_repeats
         self.observation_space = Box(0, 1, (state_repeats*(int((n_switches * 2) + n_switches * (n_switches - 1) / 2)),))
 
-    def store_observation_per_action(self, obs: List[bool], current_action: action):
-        if current_action[0] == 1 or current_action[0] == None:  # no itervention
+    def store_observation_per_action(self, obs: List[bool]):
+        if self.current_action[0] == 1 or self.current_action[0] == None:  # no itervention
             self.store_observation(obs, None, None)
         else:
-            self.store_observation(obs, self.var_names[current_action[1]], current_action[2])
+            self.store_observation(obs, self.var_names[self.current_action[1]], self.current_action[2])
 
     def update_model_per_action(self, action: action) -> bool:
         '''Updates model according to action and returns the success of the operation'''
@@ -441,12 +441,13 @@ class ContinuousSwitchboardAgent(CausalAgent):
         self.observation_space = Box(0,
                                      1,
                                      (state_repeats * (int((n_switches * 2) + n_switches * (n_switches - 1) / 2)),))
+        self.current_action = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-    def store_observation_per_action(self, obs: List[Any], action: action):
-        if action[0] == -1 or action[0] == 1:  # no itervention
+    def store_observation_per_action(self, obs: List[Any]):
+        if self.current_action[0] == -1 or self.current_action[0] == 1:  # no itervention
             self.store_observation(obs, None, None)
         else:
-            self.store_observation(obs, self.var_names[action[1]], bool(action[2]))
+            self.store_observation(obs, self.var_names[self.current_action[1]], bool(self.current_action[2]))
 
     def update_model_per_action(self, action: action) -> bool:
         if action[3] == action[4]:  # edge on the same node

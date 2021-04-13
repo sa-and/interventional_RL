@@ -7,13 +7,11 @@ from stable_baselines.deepq.policies import MlpPolicy as dqnMlpPolicy
 from stable_baselines import DQN, DDPG, ACER
 import random
 import stable_baselines.common.vec_env as venv
-import matplotlib.pyplot as plt
-from stable_baselines.ddpg.policies import MlpPolicy as ddpgMlpPolicy
-from stable_baselines.common.noise import NormalActionNoise
-from Agents import get_blank_switchboard_causal_graph
 import pickle
 from scm import StructuralCausalModel, BoolSCMGenerator
 from tqdm import tqdm
+from episode_evals import FixedLengthEpisode, EachStepGoalCheck
+
 
 
 #
@@ -181,7 +179,11 @@ def make_switchboard_constructor(scm: StructuralCausalModel,
             agent = DiscreteSwitchboardAgent(n_switches)
         else:
             agent = ContinuousSwitchboardAgent(n_switches)
-        switchboard = Switchboard(agent=agent, scm=scm, fixed_episode_length=fixed_length)
+        eval_func = EachStepGoalCheck(agent, 0.15, )
+        switchboard = Switchboard(agent=agent,
+                                  scm=scm,
+                                  fixed_episode_length=fixed_length,
+                                  eval_func=eval_func)
         switchboard.seed(seed)
         return switchboard
 
@@ -209,8 +211,8 @@ def train_switchboard_acer(steps: int,
 
     if len(train_scms) > workers:
         # no multiprocessing. For possible implementation see below
-        switchboard = venv.DummyVecEnv([make_switchboard_constructor(s, 5, fixed_length, discrete_agent)
-                                        for s in range(len(train_scms))])
+        switchboard = venv.DummyVecEnv([make_switchboard_constructor(train_scms[i], 5, fixed_length, discrete_agent)
+                                        for i in range(len(train_scms))])
 
         # this part needs to be implemented properly for multiprocessing
         # create all training environments in _workers_ parallel processes
@@ -259,18 +261,18 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exp2'
+    model_save_path = 'experiments/actual/exptest'
 
     # load train and test set
     scms = load_dataset('data/scms/switchboard/5x5var_all.pkl')
     scms_train = [scms[3], scms[119]]
     scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]
-    model, board = train_switchboard_acer(1000000,
+    model, board = train_switchboard_acer(2000000,
                                           train_scms=scms_train,
                                           fixed_length=True,
                                           discrete_agent=True,
                                           workers=6,
-                                          load_model_path='experiments/actual/exp2/model.zip')
+                                          load_model_path=None)
 
     model.save(model_save_path + 'model')
     # with open(model_save_path + 'metrics.pkl', 'wb') as f:
