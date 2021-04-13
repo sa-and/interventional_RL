@@ -10,7 +10,7 @@ import stable_baselines.common.vec_env as venv
 import pickle
 from scm import StructuralCausalModel, BoolSCMGenerator
 from tqdm import tqdm
-from episode_evals import FixedLengthEpisode, EachStepGoalCheck
+from episode_evals import FixedLengthEpisode, EachStepGoalCheck, TwoPhaseFixedEpisode
 
 
 
@@ -179,7 +179,7 @@ def make_switchboard_constructor(scm: StructuralCausalModel,
             agent = DiscreteSwitchboardAgent(n_switches)
         else:
             agent = ContinuousSwitchboardAgent(n_switches)
-        eval_func = EachStepGoalCheck(agent, 0.15, )
+        eval_func = TwoPhaseFixedEpisode(agent, 0.15, 25, 25)
         switchboard = Switchboard(agent=agent,
                                   scm=scm,
                                   fixed_episode_length=fixed_length,
