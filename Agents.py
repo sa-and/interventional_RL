@@ -117,6 +117,14 @@ class CausalAgent(ABC):
 
         return exp_val1 - exp_val2
 
+    def get_all_avg_causal_effects(self):
+        edges = [e for e in combinations(self.var_names, 2)]
+        edges.extend([(e[1], e[0]) for e in edges])
+        effects = []
+        for e in edges:
+            effects.append((e, self.get_est_avg_causal_effect(e[1], e[0], True, False)))
+        return effects
+
     def compare_edge_to_data(self, edge: Tuple[str, str], threshold: float = 0.0) -> bool:
         '''
         Checks whether the edge of the model corresponds to an actual causal effect in the interventional data. So for
@@ -134,7 +142,7 @@ class CausalAgent(ABC):
         if '(' + edge[0] + ',True)' in self.collected_data and '(' + edge[0] + ',False)' in self.collected_data:
             est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
 
-            if abs(est_causal_effect) >= threshold:
+            if est_causal_effect >= threshold:
                 return True
             else:
                 return False

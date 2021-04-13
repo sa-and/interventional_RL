@@ -31,24 +31,20 @@ if __name__ == '__main__':
     model_workers = model.n_envs
     scms = load_dataset('data/scms/switchboard/5x0var_25000.pkl')
 
-    test_evn = create_switchboard_acer_fixed()
-    states = None
-    done = [False for i in range(model_workers)]
-    obs = [test_evn.observation for i in range(model_workers)]
-    for i in range(50):
-        print(obs)
-        actions, states = model.predict(obs, state=states, mask=done, deterministic=True)
-        print(test_evn.agent.get_action_from_actionspace_sample(actions[0]))
-        obs, _, done, _ = test_evn.step(actions[0])
-        obs = [obs for i in range(model_workers)]
-        done = [done for i in range(model_workers)]
+    # just do this multiple times for easier inspection
+    for j in range(20):
+        test_evn = create_switchboard_acer_fixed()
+        states = None
+        done = [False for i in range(model_workers)]
+        obs = [test_evn.observation for i in range(model_workers)]
+
+        for i in range(50):
+            print(obs)
+            actions, states = model.predict(obs, state=states, mask=done, deterministic=True)
+            print(test_evn.agent.get_action_from_actionspace_sample(actions[0]))
+            obs, _, done, _ = test_evn.step(actions[0])
+            obs = [obs for i in range(model_workers)]
+            done = [done for i in range(model_workers)]
+            test_evn.render()
         test_evn.agent.display_causal_model()
-        test_evn.render()
-        #print(switchboard.envs[0].observation)
-        #actions, state = model.predict(obs, state=state, deterministic=True, mask=done)
-        #print(switchboard.envs[0].agent.get_action_from_actionspace_sample(actions[0]))
-        #obs, _, done, _ = switchboard.step(actions)
-        #switchboard.envs[0].agent.display_causal_model()
-        #switchboard.envs[0].render()
-        #print()
     print(done)

@@ -223,7 +223,7 @@ def train_switchboard_acer(steps: int,
         #                                  start_method='spawn')
 
     # data collection phase in order to approximate the distribution correctly
-    for i in tqdm(range(1500)):
+    for i in tqdm(range(3000)):
         a = [switchboard.action_space.sample() for i in range(switchboard.num_envs)]#[[switchboard.envs[i].envs[j].action_space.sample() for j in range(len(switchboard.envs[i].num_envs))] for i in range(switchboard.num_envs)]
         switchboard.step(a)
     print('data collection phase done\n\n\n\n\n\n\n\n\n\n')
@@ -262,15 +262,15 @@ if __name__ == '__main__':
     model_save_path = 'experiments/actual/exp2'
 
     # load train and test set
-    scms = load_dataset('data/scms/switchboard/5x0var_25000.pkl')
-    scms_train = scms[:2]
+    scms = load_dataset('data/scms/switchboard/5x5var_all.pkl')
+    scms_train = [scms[3], scms[119]]
     scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]
-    model, board = train_switchboard_acer(500000,
+    model, board = train_switchboard_acer(1000000,
                                           train_scms=scms_train,
                                           fixed_length=True,
                                           discrete_agent=True,
                                           workers=6,
-                                          load_model_path=None)
+                                          load_model_path='experiments/actual/exp2/model.zip')
 
     model.save(model_save_path + 'model')
     # with open(model_save_path + 'metrics.pkl', 'wb') as f:

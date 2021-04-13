@@ -120,8 +120,8 @@ class Switchboard(Env):
         done = almost_done = very_almost_done = learned = False
         if self.steps_this_episode >= length_per_episode:
             done = True
-            n_wrong_edges = self.agent.has_wrong_edges(0.1)
-            n_missing_edges = self.agent.has_missing_edges(0.1)
+            n_wrong_edges = self.agent.has_wrong_edges(0.15)
+            n_missing_edges = self.agent.has_missing_edges(0.15)
             learned = (n_wrong_edges + n_missing_edges == 0)
             almost_done = (n_wrong_edges + n_missing_edges < 4) and (n_wrong_edges + n_missing_edges >= 2)
             very_almost_done = (n_wrong_edges + n_missing_edges < 2) and (n_wrong_edges + n_missing_edges > 0)
