@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Any
+from typing import Tuple
 from Agents import CausalAgent
 
 
@@ -114,14 +114,16 @@ class TwoPhaseFixedEpisode(EvalFunc):
     information_phase_length: int
     task_phase_length: int
 
-    def __init__(self, agent: CausalAgent, effect_threshold: float, information_phase_length: int, task_phase_length: int):
+    def __init__(self, agent: CausalAgent,
+                 effect_threshold: float,
+                 information_phase_length: int, task_phase_length: int):
         super(TwoPhaseFixedEpisode, self).__init__(agent, effect_threshold)
         self.information_phase_length = information_phase_length
         self.task_phase_length = task_phase_length
 
     def evaluate_step(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
         """
-        Computes rewards analogous to Dasgupta. Where ther first is a information phase in which only observations or
+        Computes rewards analogous to Dasgupta. Where the first is a information phase in which only observations or
         interventions should be taken and a task phase in which only structure actions should be taken. If this is
         violated a reward of -1 is given so that the model learns to avoid this. The rest of the evaluation is as in
         the fixed episode length case where at the end of each episode the model is evaluated and a reward determined
@@ -165,6 +167,3 @@ class TwoPhaseFixedEpisode(EvalFunc):
             reward = 0
 
         return done, reward
-
-
-

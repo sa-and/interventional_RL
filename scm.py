@@ -269,3 +269,21 @@ class BoolSCMGenerator:
             ])
 
         return SCM
+
+    @staticmethod
+    def make_obs_equ_3var_envs():
+        # two 3-var networks with observationally identical distributions
+        scm1 = StructuralCausalModel()
+        scm1.add_exogenous_vars([('U' + str(i), True, random.choice, {'seq': [True, False]}) for i in range(3)])
+        scm1.add_endogenous_vars(
+            [('X0', False, lambda u0: u0, {'u0': 'U0'}),
+             ('X1', False, lambda x0, x2, u1: x0 or x2 or u1, {'x0': 'X0', 'x2': 'X2', 'u1': 'U1'}),
+             ('X2', False, lambda x0, u2: x0 or u2, {'x0': 'X0', 'u2': 'U2'})])
+        scm2 = StructuralCausalModel()
+        scm2.add_exogenous_vars([('U' + str(i), True, random.choice, {'seq': [True, False]}) for i in range(3)])
+        scm2.add_endogenous_vars(
+            [('X0', False, lambda u0: u0, {'u0': 'U0'}),
+             ('X1', False, lambda x0, u1: x0 or u1, {'x0': 'X0', 'u1': 'U1'}),
+             ('X2', False, lambda x0, u2: x0 or u2, {'x0': 'X0', 'u2': 'U2'})])
+        return scm1, scm2
+

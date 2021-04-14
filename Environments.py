@@ -17,12 +17,10 @@ class Switchboard(Env):
 
     def __init__(self, agent: CausalAgent,
                  eval_func: EvalFunc,
-                 scm: StructuralCausalModel = BoolSCMGenerator.make_switchboard_scm_without_context(),
-                 fixed_episode_length: bool = False):
+                 scm: StructuralCausalModel = BoolSCMGenerator.make_switchboard_scm_without_context()):
         super(Switchboard, self).__init__()
         self.metrics = {'ep_lengths': [],
                         'rewards': []}
-        self.fixed_episode_length = fixed_episode_length
         self.eval_func = eval_func
 
         # initialize causal model
@@ -91,10 +89,9 @@ class Switchboard(Env):
         if type(self.agent) == ContinuousSwitchboardAgent:
             print([round(a) for a in self.agent.current_action], '\treward', reward)
         else:
-            if self.fixed_episode_length and done:
-                print('episode reward', reward)
-            elif self.fixed_episode_length and not done:
-                pass
+            if type(self.eval_func) == FixedLengthEpisode or type(self.eval_func) == TwoPhaseFixedEpisode:
+                if done:
+                    print('episode reward', reward)
             else:
                 print(self.agent.current_action, '\treward', reward)
 
@@ -136,8 +133,8 @@ class ReservoirSwitchboard(Switchboard):
     """Same as Switchboard only that a new scm is loaded after each episode"""
     def __init__(self, reservoir: List[StructuralCausalModel],
                  agent: CausalAgent,
-                 fixed_episode_length: bool = False):
-        super(ReservoirSwitchboard, self).__init__(agent, scm=reservoir[0], fixed_episode_length=fixed_episode_length)
+                 eval_func: EvalFunc):
+        super(ReservoirSwitchboard, self).__init__(agent, scm=reservoir[0], eval_func=eval_func)
         self.scm_reservoir = reservoir
 
     def reset(self):

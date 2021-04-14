@@ -156,14 +156,14 @@ def load_dataset(path):
 # For multiprocessing
 def make_res_switchboard_constructor(scms: List[StructuralCausalModel],
                                      n_switches,
-                                     fixed_length: bool = True,
                                      discrete_agent: bool = True):
     def make_switchboard_env():
         if discrete_agent:
             agent = DiscreteSwitchboardAgent(n_switches)
         else:
             agent = ContinuousSwitchboardAgent(n_switches)
-        switchboard = ReservoirSwitchboard(agent=agent, reservoir=scms, fixed_episode_length=fixed_length)
+        eval_func = FixedLengthEpisode(agent, 0.1, 50)
+        switchboard = ReservoirSwitchboard(agent=agent, reservoir=scms)
         return switchboard
 
     return make_switchboard_env
@@ -171,7 +171,6 @@ def make_res_switchboard_constructor(scms: List[StructuralCausalModel],
 
 def make_switchboard_constructor(scm: StructuralCausalModel,
                                  n_switches: int,
-                                 fixed_length: bool = True,
                                  discrete_agent: bool = True,
                                  seed: int = 0):
     def make_switchboard_env():
@@ -179,10 +178,9 @@ def make_switchboard_constructor(scm: StructuralCausalModel,
             agent = DiscreteSwitchboardAgent(n_switches)
         else:
             agent = ContinuousSwitchboardAgent(n_switches)
-        eval_func = TwoPhaseFixedEpisode(agent, 0.15, 25, 25)
+        eval_func = FixedLengthEpisode(agent, 0.1, 50)
         switchboard = Switchboard(agent=agent,
                                   scm=scm,
-                                  fixed_episode_length=fixed_length,
                                   eval_func=eval_func)
         switchboard.seed(seed)
         return switchboard
@@ -192,26 +190,26 @@ def make_switchboard_constructor(scm: StructuralCausalModel,
 
 def train_switchboard_acer(steps: int,
                            train_scms: List[StructuralCausalModel],
-                           fixed_length: bool = True,
                            discrete_agent: bool = True,
                            load_model_path: str = None,
-                           workers: int = 1):
+                           workers: int = 1,
+                           n_switches: int = 5):
     # possibly set up multiprocessing environments
     if len(train_scms) == 1:
         # create all workers with the same environment
-        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[0], 5, fixed_length, discrete_agent, w)
+        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[0], n_switches, discrete_agent, w)
                                          for w in range(workers)],
                                          start_method='spawn')
 
     elif len(train_scms) <= workers:
         # start each worker with a different environment
-        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[i], 5, fixed_length, discrete_agent, i)
+        switchboard = venv.SubprocVecEnv([make_switchboard_constructor(train_scms[i], n_switches, discrete_agent, i)
                                           for i in range(len(train_scms))],
                                          start_method='spawn')
 
     if len(train_scms) > workers:
         # no multiprocessing. For possible implementation see below
-        switchboard = venv.DummyVecEnv([make_switchboard_constructor(train_scms[i], 5, fixed_length, discrete_agent)
+        switchboard = venv.DummyVecEnv([make_switchboard_constructor(train_scms[i], n_switches, discrete_agent)
                                         for i in range(len(train_scms))])
 
         # this part needs to be implemented properly for multiprocessing
@@ -261,18 +259,19 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exptest'
+    model_save_path = 'experiments/actual/exp2/'
 
     # load train and test set
     scms = load_dataset('data/scms/switchboard/5x5var_all.pkl')
-    scms_train = [scms[3], scms[119]]
-    scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]
+    scms_train = [scms[3], scms[119]]  # exp 4, training 2
+    scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]  # exp 2, training
+    # scms_train = BoolSCMGenerator.make_obs_equ_3var_envs()  # exp 5, training 3
     model, board = train_switchboard_acer(2000000,
                                           train_scms=scms_train,
-                                          fixed_length=True,
                                           discrete_agent=True,
                                           workers=6,
-                                          load_model_path=None)
+                                          load_model_path='experiments/actual/exp2/model.zip',
+                                          n_switches=5)
 
     model.save(model_save_path + 'model')
     # with open(model_save_path + 'metrics.pkl', 'wb') as f:

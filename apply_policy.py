@@ -5,12 +5,14 @@ from Agents import DiscreteSwitchboardAgent
 import stable_baselines.common.vec_env as venv
 import numpy as np
 from training import load_dataset
+from episode_evals import FixedLengthEpisode
 
 
 def create_switchboard_acer_fixed():
     gen = BoolSCMGenerator(5, 0)
     agent = DiscreteSwitchboardAgent(5)
-    a = Switchboard(agent, fixed_episode_length=True, scm=gen.make_switchboard_scm_with_context())
+    eval_func = FixedLengthEpisode(agent, 0.1, 50)
+    a = Switchboard(agent, scm=gen.make_switchboard_scm_with_context(), eval_func=eval_func)
     return a
 
 
