@@ -4,15 +4,15 @@ from Environments import BoolSCMGenerator, Switchboard
 from Agents import DiscreteSwitchboardAgent
 import stable_baselines.common.vec_env as venv
 import numpy as np
-from training import load_dataset
 from episode_evals import FixedLengthEpisode
+from training import load_dataset
 
 
 def create_switchboard_acer_fixed():
     gen = BoolSCMGenerator(5, 0)
     agent = DiscreteSwitchboardAgent(5)
     eval_func = FixedLengthEpisode(agent, 0.1, 50)
-    a = Switchboard(agent, scm=gen.make_switchboard_scm_with_context(), eval_func=eval_func)
+    a = Switchboard(agent, scm=load_dataset('data/scms/switchboard/5x5var_all.pkl')[119], eval_func=eval_func)
     return a
 
 
@@ -28,19 +28,19 @@ def load_policy(path, env, algo='ACER'):
 
 
 if __name__ == '__main__':
-    model_path = f'experiments/actual/exp2/model.zip'
+    model_path = f'experiments/actual/exp4/model.zip'
     model = ACER.load(model_path)
     model_workers = model.n_envs
-    scms = load_dataset('data/scms/switchboard/5x0var_25000.pkl')
 
     # just do this multiple times for easier inspection
     for j in range(20):
         test_evn = create_switchboard_acer_fixed()
-        states = None
+        states = model.initial_state
         done = [False for i in range(model_workers)]
-        obs = [test_evn.observation for i in range(model_workers)]
+        obs = test_evn.reset()
+        obs = [obs for i in range(model_workers)]
 
-        for i in range(50):
+        for i in range(49):
             print(obs)
             actions, states = model.predict(obs, state=states, mask=done, deterministic=True)
             print(test_evn.agent.get_action_from_actionspace_sample(actions[0]))

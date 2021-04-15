@@ -26,7 +26,7 @@ class Switchboard(Env):
         # initialize causal model
         self.SCM = scm
 
-        self.lights = [False]*5  # all lights are off
+        self.lights = [False]*len(self.SCM.endogenous_vars)  # all lights are off
 
         assert type(agent) == DiscreteSwitchboardAgent or type(agent) == ContinuousSwitchboardAgent, \
             'Wrong agent for this environment'

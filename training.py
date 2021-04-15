@@ -259,19 +259,19 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exp2/'
+    model_save_path = 'experiments/actual/exp5/'
 
     # load train and test set
     scms = load_dataset('data/scms/switchboard/5x5var_all.pkl')
     scms_train = [scms[3], scms[119]]  # exp 4, training 2
     scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]  # exp 2, training
-    # scms_train = BoolSCMGenerator.make_obs_equ_3var_envs()  # exp 5, training 3
-    model, board = train_switchboard_acer(2000000,
+    scms_train = BoolSCMGenerator.make_obs_equ_3var_envs()  # exp 5, training 3
+    model, board = train_switchboard_acer(700000,
                                           train_scms=scms_train,
                                           discrete_agent=True,
                                           workers=6,
-                                          load_model_path='experiments/actual/exp2/model.zip',
-                                          n_switches=5)
+                                          load_model_path='experiments/actual/exp5/model.zip',
+                                          n_switches=3)
 
     model.save(model_save_path + 'model')
     # with open(model_save_path + 'metrics.pkl', 'wb') as f:
