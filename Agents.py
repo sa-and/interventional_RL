@@ -107,10 +107,6 @@ class CausalAgent(ABC):
 
         return True
 
-    @abstractmethod
-    def update_model_per_action(self, action: Any):
-        raise NotImplementedError
-
     def get_est_avg_causal_effect(self, query: str, intervened_var: str, val1: Any, val2: Any) -> float:
         exp_val1 = self._get_expected_value(self.get_est_postint_distrib(query, intervened_var, val1))
         exp_val2 = self._get_expected_value(self.get_est_postint_distrib(query, intervened_var, val2))
@@ -233,12 +229,6 @@ class CausalAgent(ABC):
         
         return missing_edges
 
-    @staticmethod
-    def _get_expected_value(distribution: pd.Series) -> float:
-        if type(distribution.index[0] == bool):
-            distribution = distribution.rename({True: 1, False: 0})
-        return sum(distribution.index.values * distribution._values)
-
     def get_est_postint_distrib(self, query: str, intervened_var: str, val: Any) -> pd.Series:
         '''Computes and returns P(Query | do(action))'''
         key = '('+intervened_var+','+str(val)+')'
@@ -270,10 +260,6 @@ class CausalAgent(ABC):
         else:
             self.collected_data[key] = obs_dict
 
-    @abstractmethod
-    def store_observation_per_action(self, obs: List[Any]):
-        raise NotImplementedError
-
     def get_est_cond_distr(self, query: str, var: str, val: Any) -> DataFrame:
         obs_data = self.collected_data['(None, None)']
         obs_data = obs_data[obs_data[var] == val]
@@ -284,51 +270,6 @@ class CausalAgent(ABC):
         fig, ax = plt.subplots()
         nx.draw_circular(self.causal_model, ax=ax, with_labels=True)
         fig.show()
-
-    # def evaluate_causal_model(self) -> float:
-    #     '''
-    #     Evaluate how well the estimated model of the agent fits the interventional data collected from the
-    #     actual environment.
-    #     :return:
-    #     '''
-    #     if '(None, None)' in self.collected_data and len(self.collected_data['(None, None)']) < 100:  # minimal amout of observations for evaluation
-    #         return -2
-    #     # estimate bayesian network from the structure of the model and observational data
-    #     bn = BayesianNetwork(self.causal_model)
-    #     if type(self.collected_data) == bool:
-    #         bn.fit_node_states_and_cpds(self.collected_data['(None, None)'].replace([True, False], [1, 0]))
-    #     else:
-    #         raise NotImplementedError
-    #
-    #     ie = InferenceEngine(bn)
-    #     var_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
-    #     var_pairs = [pair for pair in var_pairs if self.is_legal_intervention(pair[0])]  # only legal pairs
-    #
-    #     losses = []
-    #     for pair in var_pairs:
-    #         for val in [0, 1]:  # TODO: generalize this to the actual domain of the variables (maybe through bn.Node_states)
-    #             did = False  # TODO: move this right after the start of outer loop or filter before loop
-    #             try:
-    #                 ie.do_intervention(pair[0], val)
-    #                 did = True
-    #                 predicted_dist = pd.Series(ie.query()[pair[1]])
-    #                 est_true_distribution = self.get_est_postint_distrib(pair[1], pair[0], bool(val))
-    #
-    #                 if len(self.collected_data[str((pair[0], bool(val)))]) > 4:  # minimal size for interventional distributions
-    #                     expvalpred = self._get_expected_value(predicted_dist)
-    #                     expvaltrue = self._get_expected_value(est_true_distribution)
-    #                     losses.append((expvalpred-expvaltrue)**2)
-    #
-    #             except ValueError as e:
-    #                 print(e)
-    #
-    #             if did:
-    #                 ie.reset_do(pair[0])
-    #
-    #     if len(losses) == 0:  # all interventional distributions were too small
-    #         return -2
-    #     else:
-    #         return -sum(losses)/len(losses)
 
     def graph_is_learned(self, threshold: float = 0.0) -> bool:
         n_wrong_edges = self.has_wrong_edges(threshold)
@@ -374,8 +315,22 @@ class CausalAgent(ABC):
         is_connected = nx.number_weakly_connected_components(model) <= 1
         return is_connected
 
+    @staticmethod
+    def _get_expected_value(distribution: pd.Series) -> float:
+        if type(distribution.index[0] == bool):
+            distribution = distribution.rename({True: 1, False: 0})
+        return sum(distribution.index.values * distribution._values)
+
     @abstractmethod
     def get_action_from_actionspace_sample(self, sample: Any):
+        raise NotImplementedError
+
+    @abstractmethod
+    def store_observation_per_action(self, obs: List[Any]):
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_model_per_action(self, action: Any):
         raise NotImplementedError
 
 
@@ -432,11 +387,11 @@ class ContinuousSwitchboardAgent(CausalAgent):
 
         self.action_space = Box(low=np.array([-1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
                                 high=np.array([1.0,
-                                      float(len(self.var_names)),
-                                      1.0,
-                                      float(len(self.var_names)),
-                                      float(len(self.var_names)),
-                                      2.0]),
+                                               float(len(self.var_names)),
+                                               1.0,
+                                               float(len(self.var_names)),
+                                               float(len(self.var_names)),
+                                               2.0]),
                                 shape=(6,))
         self.state_repeats = state_repeats
         self.observation_space = Box(0,

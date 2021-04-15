@@ -145,6 +145,8 @@ class SwitchboardReservoir(Env):
             self.envs.append(Switchboard(agent, eval_func, scm))
 
         self.current_env = self.envs[0]
+        self.action_space = self.current_env.action_space
+        self.observation_space = self.current_env.observation_space
 
     def reset(self):
         # reset the current environment

@@ -167,3 +167,12 @@ class TwoPhaseFixedEpisode(EvalFunc):
             reward = 0
 
         return done, reward
+
+
+class NoEval(EvalFunc):
+    """Does nothing. Used when applying the policy so there are no prints and rewards"""
+    def __init__(self):
+        super(NoEval, self).__init__(None, None)
+
+    def evaluate_step(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
+        pass

@@ -1,9 +1,10 @@
-from typing import List, Callable, Tuple, NoReturn, Any
+from typing import List, Callable, Tuple, Any
 from scipy.special import comb
 import copy
 import random
 import networkx as nx
 from tqdm import tqdm
+import pickle
 
 
 class StructuralCausalModel:
@@ -286,4 +287,11 @@ class BoolSCMGenerator:
              ('X1', False, lambda x0: x0, {'x0': 'X0'}),
              ('X2', False, lambda x0: x0, {'x0': 'X0'})])
         return scm1, scm2
+
+    @staticmethod
+    def load_dataset(path):
+        with open(path, 'rb') as f:
+            dic = pickle.load(f)
+        return dic
+
 
