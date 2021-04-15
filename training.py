@@ -1,5 +1,5 @@
 from typing import List
-from Environments import Switchboard, ReservoirSwitchboard
+from Environments import Switchboard
 from Agents import DiscreteSwitchboardAgent, ContinuousSwitchboardAgent
 from stable_baselines.a2c import A2C
 from stable_baselines.common.policies import MlpLstmPolicy
@@ -153,22 +153,6 @@ def load_dataset(path):
     return dic
 
 
-# For multiprocessing
-def make_res_switchboard_constructor(scms: List[StructuralCausalModel],
-                                     n_switches,
-                                     discrete_agent: bool = True):
-    def make_switchboard_env():
-        if discrete_agent:
-            agent = DiscreteSwitchboardAgent(n_switches)
-        else:
-            agent = ContinuousSwitchboardAgent(n_switches)
-        eval_func = FixedLengthEpisode(agent, 0.1, 50)
-        switchboard = ReservoirSwitchboard(agent=agent, reservoir=scms)
-        return switchboard
-
-    return make_switchboard_env
-
-
 def make_switchboard_constructor(scm: StructuralCausalModel,
                                  n_switches: int,
                                  discrete_agent: bool = True,
@@ -178,7 +162,7 @@ def make_switchboard_constructor(scm: StructuralCausalModel,
             agent = DiscreteSwitchboardAgent(n_switches)
         else:
             agent = ContinuousSwitchboardAgent(n_switches)
-        eval_func = FixedLengthEpisode(agent, 0.1, 50)
+        eval_func = TwoPhaseFixedEpisode(agent, 0.2, 10, 10)
         switchboard = Switchboard(agent=agent,
                                   scm=scm,
                                   eval_func=eval_func)
@@ -241,7 +225,7 @@ def train_switchboard_acer(steps: int,
                                                   'vf': [10]}],
                                     'n_lstm': 100},
 
-                     n_steps=50,
+                     n_steps=20,
                      n_cpu_tf_sess=8,
                      replay_ratio=10,
                      buffer_size=500000
@@ -259,18 +243,18 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exp5/'
+    model_save_path = 'experiments/actual/exp6/'
 
     # load train and test set
     scms = load_dataset('data/scms/switchboard/5x5var_all.pkl')
-    scms_train = [scms[3], scms[119]]  # exp 4, training 2
-    scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]  # exp 2, training
-    scms_train = BoolSCMGenerator.make_obs_equ_3var_envs()  # exp 5, training 3
-    model, board = train_switchboard_acer(700000,
+    # scms_train = [scms[3], scms[119]]  # exp 4, training 2
+    # scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]  # exp 2, training
+    scms_train = BoolSCMGenerator.make_obs_equ_3var_envs()  # exp 5 and 6, training 3 and training
+    model, board = train_switchboard_acer(500000,
                                           train_scms=scms_train,
                                           discrete_agent=True,
                                           workers=6,
-                                          load_model_path='experiments/actual/exp5/model.zip',
+                                          load_model_path='experiments/actual/exp6/model.zip',
                                           n_switches=3)
 
     model.save(model_save_path + 'model')

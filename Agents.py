@@ -17,6 +17,7 @@ class CausalAgent(ABC):
     collected_data: dict
     actions: List[Any]
     state_repeats: int
+    action_space: Union[Discrete, Box]
 
     def __init__(self, vars: Union[int, List[str]], causal_graph: StructureModel = None):
         if type(vars) == int:

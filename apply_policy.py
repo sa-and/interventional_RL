@@ -10,9 +10,9 @@ from training import load_dataset
 
 def create_switchboard_acer_fixed():
     gen = BoolSCMGenerator(5, 0)
-    agent = DiscreteSwitchboardAgent(5)
+    agent = DiscreteSwitchboardAgent(3)
     eval_func = FixedLengthEpisode(agent, 0.1, 50)
-    a = Switchboard(agent, scm=load_dataset('data/scms/switchboard/5x5var_all.pkl')[119], eval_func=eval_func)
+    a = Switchboard(agent, scm=BoolSCMGenerator.make_obs_equ_3var_envs()[1], eval_func=eval_func)
     return a
 
 
@@ -28,7 +28,7 @@ def load_policy(path, env, algo='ACER'):
 
 
 if __name__ == '__main__':
-    model_path = f'experiments/actual/exp4/model.zip'
+    model_path = f'experiments/actual/exp5/model.zip'
     model = ACER.load(model_path)
     model_workers = model.n_envs
 
@@ -49,4 +49,5 @@ if __name__ == '__main__':
             done = [done for i in range(model_workers)]
             test_evn.render()
         test_evn.agent.display_causal_model()
+        print('\n\n\n\n')
     print(done)

@@ -8,6 +8,7 @@ import numpy as np
 from scm import StructuralCausalModel, BoolSCMGenerator
 import random
 from episode_evals import EvalFunc, EachStepGoalCheck, FixedLengthEpisode, TwoPhaseFixedEpisode
+from tqdm import tqdm
 
 
 class Switchboard(Env):
@@ -129,15 +130,51 @@ class Switchboard(Env):
             print(out)
 
 
-class ReservoirSwitchboard(Switchboard):
-    """Same as Switchboard only that a new scm is loaded after each episode"""
-    def __init__(self, reservoir: List[StructuralCausalModel],
-                 agent: CausalAgent,
-                 eval_func: EvalFunc):
-        super(ReservoirSwitchboard, self).__init__(agent, scm=reservoir[0], eval_func=eval_func)
-        self.scm_reservoir = reservoir
+class SwitchboardReservoir(Env):
+    envs: List[Switchboard]
+
+    def __init__(self, scms: List[StructuralCausalModel],
+                 n_switches: int,
+                 agent_type: type(CausalAgent),
+                 eval_func_type: type(EvalFunc)):
+
+        self.envs = []
+        for scm in scms:
+            agent = agent_type(n_switches)
+            eval_func = eval_func_type(agent, 0.2, 20)
+            self.envs.append(Switchboard(agent, eval_func, scm))
+
+        self.current_env = self.envs[0]
 
     def reset(self):
-        self.SCM = random.sample(self.scm_reservoir, 1)[0]
-        return super(ReservoirSwitchboard, self).reset()
+        # reset the current environment
+        self.current_env.reset()
 
+        # choose a random next environment and reset it
+        self.current_env = random.choice(self.envs)
+        return self.current_env.reset()
+
+    def step(self, action):
+        return self.current_env.step(action)
+
+    def render(self, mode='human'):
+        self.current_env.render(mode)
+
+    def collect_interv_data(self, n_collections_per_env: int):
+        """
+        Performs n_collections_per_env interventional steps in each environment of the reservoir in order
+        to approximate the interventional distribution. This should be done every time before training
+        :param n_collections_per_env: How many datapoints to collect for each environment
+        """
+        print('Collecting interventional data...')
+        bar = tqdm(total=len(self.envs)*n_collections_per_env)
+        for e in self.envs:
+            i = 0
+            while i < n_collections_per_env:
+                action = e.action_space.sample()
+                if e.agent.get_action_from_actionspace_sample(action)[0] == 1:
+                    pass
+                else:
+                    e.step(action)
+                    i += 1
+                    bar.update(1)
