@@ -175,4 +175,4 @@ class NoEval(EvalFunc):
         super(NoEval, self).__init__(None, None)
 
     def evaluate_step(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
-        pass
+        return False, 0.0

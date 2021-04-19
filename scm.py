@@ -144,7 +144,7 @@ class BoolSCMGenerator:
             graph.remove_edge(random_edge[0], random_edge[1])
 
         # create scm
-        return self._create_scm_from_graph(graph), removed_edges
+        return self.create_scm_from_graph(graph), removed_edges
 
     def create_n(self, n: int) -> List[StructuralCausalModel]:
         """
@@ -188,7 +188,22 @@ class BoolSCMGenerator:
             [graph.add_edge(c, n) for c in cs]
         return graph
 
-    def _create_scm_from_graph(self, graph: nx.DiGraph) -> StructuralCausalModel:
+    @staticmethod
+    def create_graph_from_scm(scm: StructuralCausalModel):
+        graph = nx.DiGraph()
+
+        # create nodes
+        [graph.add_node(var) for var in scm.endogenous_vars]
+
+        for var in scm.functions:
+            for parent in scm.functions[var][1]:
+                if parent in scm.endogenous_vars:
+                    graph.add_edge(parent, var)
+
+        return graph
+
+    @staticmethod
+    def create_scm_from_graph(graph: nx.DiGraph) -> StructuralCausalModel:
         """
         Takes a networkx graph and builds a scm according to it's hierarchical structure. The functions causing the
         values of the variables are fixed as a boolean or over their causes.
@@ -200,11 +215,12 @@ class BoolSCMGenerator:
         for n in graph.nodes:
             parents = [p for p in graph.predecessors(n)]
             if n[0] == 'X':
-                scm.add_endogenous_var(n, False, self._make_f(parents), {p: p for p in parents})
+                scm.add_endogenous_var(n, False, BoolSCMGenerator._make_f(parents), {p: p for p in parents})
             else:
                 scm.add_exogenous_var(n, False, random.choice, {'seq': [True, False]})
         return scm
 
+    @staticmethod
     def _make_f(self, parents: List[str]):
         """
         Creates a boolean OR function over the causes/parents of a variable.
@@ -289,7 +305,7 @@ class BoolSCMGenerator:
         return scm1, scm2
 
     @staticmethod
-    def load_dataset(path):
+    def load_dataset(path: str) -> List[StructuralCausalModel]:
         with open(path, 'rb') as f:
             dic = pickle.load(f)
         return dic

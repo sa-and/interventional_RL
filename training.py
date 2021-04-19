@@ -90,7 +90,7 @@ def train_switchboard_acer(steps: int,
                                                   'vf': [10]}],
                                     'n_lstm': 100},
 
-                     n_steps=20,
+                     n_steps=50,
                      n_cpu_tf_sess=8,
                      replay_ratio=10,
                      buffer_size=500000
@@ -102,17 +102,16 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exptest/'
+    model_save_path = 'experiments/actual/exp6/'
 
     # load train and test set
-    scms = BoolSCMGenerator.load_dataset('data/scms/switchboard/5x5var_all.pkl')
-    # scms_train = [scms[3], scms[119]]  # exp 4, training 2
-    # scms_train = [BoolSCMGenerator.make_switchboard_scm_with_context()]  # exp 2, training
-    scms_train = BoolSCMGenerator.make_obs_equ_3var_envs()  # exp 5 and 6, training 3 and training
-    model, board = train_switchboard_acer(200000,
+    scms = BoolSCMGenerator.load_dataset('data/scms/switchboard/3x3var_all.pkl')
+    scms_train = scms[:20]  # exp6, training 2
+    # scms_train = BoolSCMGenerator.make_obs_equ_3var_envs()  # exp 5 training
+    model, board = train_switchboard_acer(4000000,
                                           train_scms=scms_train,
-                                          workers=6,
-                                          load_model_path='experiments/actual/exptest/model.zip',
+                                          workers=4,
+                                          load_model_path='experiments/actual/exp6/model.zip',
                                           n_switches=3)
 
     model.save(model_save_path + 'model')

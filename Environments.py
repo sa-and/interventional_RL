@@ -141,7 +141,7 @@ class SwitchboardReservoir(Env):
         self.envs = []
         for scm in scms:
             agent = agent_type(n_switches)
-            eval_func = eval_func_type(agent, 0.2, 20)
+            eval_func = eval_func_type(agent, 0.1, 50)
             self.envs.append(Switchboard(agent, eval_func, scm))
 
         self.current_env = self.envs[0]
