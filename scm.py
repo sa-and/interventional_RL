@@ -221,7 +221,7 @@ class BoolSCMGenerator:
         return scm
 
     @staticmethod
-    def _make_f(self, parents: List[str]):
+    def _make_f(parents: List[str]):
         """
         Creates a boolean OR function over the causes/parents of a variable.
 

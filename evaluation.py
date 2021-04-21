@@ -72,19 +72,27 @@ def learn_from_obs(algo):
 
 
 if __name__ == '__main__':
-    model = ACER.load(f'experiments/actual/exp6/model.zip')
-    eval_data = BoolSCMGenerator.load_dataset('data/scms/switchboard/3x3var_all.pkl')[:20]
+    model = ACER.load(f'experiments/actual/exp8/model.zip')
+    gen = BoolSCMGenerator(3, 3)
+    eval_data = BoolSCMGenerator.load_dataset('data/scms/switchboard/3x3var_all.pkl')[20:]
     differences = []
     for scm in eval_data:
         target_graph = BoolSCMGenerator.create_graph_from_scm(scm)
 
         for run in range(20):
+            # from learned policy
             predicted_graph = apply_policy(model=model,
                                            test_scm=scm,
                                            n_vars=3,
-                                           episode_length=50,
+                                           episode_length=20,
                                            display=False)
+
+            # from obs based algo
             # predicted_graph = learn_from_obs(algo=PC)
+
+            # random
+            # predicted_graph = BoolSCMGenerator.create_graph_from_scm(gen.create_random()[0])
+
             difference = compare_graphs(predicted_graph, target_graph)
             differences.append(difference)
             print('.')

@@ -107,6 +107,9 @@ class FixedLengthEpisode(EvalFunc):
         else:
             reward = 0
 
+        if done:
+            print('episode reward', reward)
+
         return done, reward
 
 
@@ -116,10 +119,12 @@ class TwoPhaseFixedEpisode(EvalFunc):
 
     def __init__(self, agent: CausalAgent,
                  effect_threshold: float,
-                 information_phase_length: int, task_phase_length: int):
+                 information_phase_length: int,
+                 task_phase_length: int):
         super(TwoPhaseFixedEpisode, self).__init__(agent, effect_threshold)
         self.information_phase_length = information_phase_length
         self.task_phase_length = task_phase_length
+        self.rewards = []
 
     def evaluate_step(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
         """
@@ -142,29 +147,37 @@ class TwoPhaseFixedEpisode(EvalFunc):
             self.steps_this_episode = 0
             learned, very_almost_done, almost_done = self._eval_model()
 
-        # if structure action is taken in information phase
-        if self.agent.current_action[0] == 1 and self.steps_this_episode <= self.information_phase_length:
-            reward = -10
+        if not done:
+            # if structure action is taken in information phase
+            if (self.agent.current_action[0] == 1 or self.agent.current_action[0] == None) and self.steps_this_episode <= self.information_phase_length:
+                reward = -1
 
-        # if listening action is taken in task phase
-        elif self.agent.current_action[0] == 0 and self.steps_this_episode > self.information_phase_length:
-            reward = -10
+            # if listening action is taken in task phase
+            elif self.agent.current_action[0] == 0 and self.steps_this_episode > self.information_phase_length:
+                reward = -1
 
-        # if an illegal action was taken
-        elif not action_successful and not allow_unsuccessful_actions:
-            reward = -10
+            # if an illegal action was taken
+            elif not action_successful and not allow_unsuccessful_actions:
+                reward = -1
 
-        # rewards for building correct graphs. Will only be True if episode length is reached
-        elif almost_done:
-            reward = 2
-        elif very_almost_done:
-            reward = 5
-        elif learned:
-            reward = 30
+            else:
+                reward = 0
 
-        # default reward of 0 for all other cases
         else:
-            reward = 0
+            # rewards for building correct graphs. Will only be True if episode length is reached
+            if almost_done:
+                reward = 2
+            elif very_almost_done:
+                reward = 5
+            elif learned:
+                reward = 30
+            else:
+                reward = 0
+
+        self.rewards.append(reward)
+        if done:
+            print('episode reward:', sum(self.rewards), ' eval reward:', reward)
+            self.rewards = []
 
         return done, reward
 

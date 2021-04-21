@@ -1,6 +1,7 @@
 from typing import List, Callable, Tuple, NoReturn, Any
 
 from gym import Env
+from gym.spaces import Discrete, Box
 from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardAgent,\
     get_switchboard_causal_graph, get_almost_right_switchboard_causal_graph, get_blank_switchboard_causal_graph
 import copy
@@ -89,12 +90,6 @@ class Switchboard(Env):
         self.metrics['rewards'].append(reward)
         if type(self.agent) == ContinuousSwitchboardAgent:
             print([round(a) for a in self.agent.current_action], '\treward', reward)
-        else:
-            if type(self.eval_func) == FixedLengthEpisode or type(self.eval_func) == TwoPhaseFixedEpisode:
-                if done:
-                    print('episode reward', reward)
-            else:
-                print(self.agent.current_action, '\treward', reward)
 
         # reset environment if episode is done
         if done:
@@ -141,7 +136,12 @@ class SwitchboardReservoir(Env):
         self.envs = []
         for scm in scms:
             agent = agent_type(n_switches)
-            eval_func = eval_func_type(agent, 0.1, 50)
+            if eval_func_type == FixedLengthEpisode:
+                eval_func = eval_func_type(agent, 0.1, 30)
+            elif eval_func_type == TwoPhaseFixedEpisode:
+                eval_func = eval_func_type(agent, 0.1, 10, 10)
+            else:
+                raise NotImplementedError('environment has not implementation for this evaluation function')
             self.envs.append(Switchboard(agent, eval_func, scm))
 
         self.current_env = self.envs[0]
@@ -180,3 +180,39 @@ class SwitchboardReservoir(Env):
                     e.step(action)
                     i += 1
                     bar.update(1)
+
+
+class Dumb(Env):
+    """Dummy environment to check if policy can change bahaviour after a given amount of steps (info_length)"""
+    def __init__(self):
+        self.action_space = Discrete(2)
+        self.info_length = 5
+        self.observation_space = Discrete(1)
+        self.steps = 0
+
+    def reset(self):
+        self.steps = 0
+        return 0.0
+
+    def step(self, action):
+        self.steps += 1
+        if action == 0 and self.steps > self.info_length:
+            reward = -1
+        elif action == 1 and self.steps <= self.info_length:
+            reward = -1
+        else:
+            reward = 0
+
+        if self.steps == self.info_length*2:
+            done = True
+            print('episode done\n\n\n\n')
+        else:
+            done = False
+
+        print('action:', action, ' reward:', reward)
+
+        return 0.0, reward, done, {}
+
+    def render(self, mode='human'):
+        print()
+

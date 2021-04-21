@@ -6,26 +6,24 @@ from cdt.causality.graph import PC, LiNGAM, GES
 from pandas import DataFrame, Series
 import networkx as nx
 import matplotlib.pyplot as plt
-cdt.SETTINGS.rpath = 'C:/Program Files/R/R-4.0.5/bin/Rscript'
+from stable_baselines import ACER
+import gym
+import random
+from Environments import Dumb
+from stable_baselines.common.policies import MlpLstmPolicy
 
-scm = BoolSCMGenerator.load_dataset('data/scms/switchboard/3x3var_all.pkl')[9]
-# agent = DiscreteSwitchboardAgent(3)
-# env = Switchboard(agent, NoEval(), scm=scms[19])
-columns = ['X0', 'X1', 'X2']
-obs_data = DataFrame(columns=columns)
-lights = []
-for i in range(1000):
-    lights = scm.get_next_instantiation()[0]
-    dic = {'X'+str(i): float(lights[i]) for i in range(len(lights))}
-    obs_data = obs_data.append({'X'+str(i): float(lights[i]) for i in range(len(lights))}, ignore_index=True)
+model = ACER(MlpLstmPolicy, Dumb(),
+                     policy_kwargs={'net_arch': [10,
+                                                 'lstm',
+                                                 {'pi': [10],
+                                                  'vf': [10]}],
+                                    'n_lstm': 10},
 
-print(obs_data)
+                     n_steps=10,
+                     n_cpu_tf_sess=8,
+                     replay_ratio=5,
+                     buffer_size=500000,
+                     verbose=1
+                     )
 
-
-algo = GES()
-graph = algo.predict(obs_data)
-nx.draw_networkx(graph)
-plt.show()
-nx.draw_networkx(BoolSCMGenerator.create_graph_from_scm(scm))
-plt.show()
-print()
+model.learn(50000)
