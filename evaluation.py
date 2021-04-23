@@ -6,16 +6,9 @@ import networkx as nx
 import numpy as np
 import cdt
 from cdt.causality.graph import PC, GES
+
 from pandas import DataFrame
 cdt.SETTINGS.rpath = 'C:/Program Files/R/R-4.0.5/bin/Rscript'
-
-
-# def create_switchboard_acer_fixed():
-#     gen = BoolSCMGenerator(5, 0)
-#     agent = DiscreteSwitchboardAgent(3)
-#     eval_func = NoEval()
-#     a = Switchboard(agent, scm=BoolSCMGenerator.make_obs_equ_3var_envs()[1], eval_func=eval_func)
-#     return a
 
 
 def apply_policy(model, test_scm, n_vars, episode_length, display):
@@ -72,9 +65,10 @@ def learn_from_obs(algo):
 
 
 if __name__ == '__main__':
-    model = ACER.load(f'experiments/actual/exp8/model.zip')
-    gen = BoolSCMGenerator(3, 3)
-    eval_data = BoolSCMGenerator.load_dataset('data/scms/switchboard/3x3var_all.pkl')[20:]
+    model = ACER.load(f'experiments/actual/exptest/model.zip')
+    gen = BoolSCMGenerator(4, 4)
+    eval_data = BoolSCMGenerator.load_dataset('data/scms/switchboard/4x4var_all.pkl')[:50]
+    eval_data = [BoolSCMGenerator.make_obs_equ_3var_envs()[1]]
     differences = []
     for scm in eval_data:
         target_graph = BoolSCMGenerator.create_graph_from_scm(scm)
@@ -85,7 +79,7 @@ if __name__ == '__main__':
                                            test_scm=scm,
                                            n_vars=3,
                                            episode_length=20,
-                                           display=False)
+                                           display=True)
 
             # from obs based algo
             # predicted_graph = learn_from_obs(algo=PC)

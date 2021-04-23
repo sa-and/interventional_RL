@@ -33,16 +33,17 @@ def train_switchboard_acer(steps: int,
     # Create new model
     else:
         model = ACER(MlpLstmPolicy, env,
-                     policy_kwargs={'net_arch': [20,
-                                                 'lstm',
+                     policy_kwargs={'net_arch': ['lstm',
                                                  {'pi': [40],
                                                   'vf': [10]}],
-                                    'n_lstm': 60},
+                                    'n_lstm': 40},
 
                      n_steps=20,
                      n_cpu_tf_sess=8,
-                     replay_ratio=5,
-                     buffer_size=500000
+                     replay_ratio=10,
+                     buffer_size=500000,
+                     trust_region=False,
+                     gamma=0.999
                      )
 
     model.learn(steps)
@@ -51,19 +52,17 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exp8/'
+    model_save_path = 'experiments/actual/exptest/'
 
     # load train and test set
-    # exp7, training
+    # exp8, training
     scms = BoolSCMGenerator.load_dataset('data/scms/switchboard/4x4var_all.pkl')
-    scms_train = scms[:500]
-    # exp8, training 2
-    scms = BoolSCMGenerator.load_dataset('data/scms/switchboard/3x3var_all.pkl')
-    scms_train = scms[:20]
-    model, board = train_switchboard_acer(2000000,
+    scms_train = scms[:50]
+    scms_train = list(BoolSCMGenerator.make_obs_equ_3var_envs())
+    model, board = train_switchboard_acer(1000000,
                                           train_scms=scms_train,
                                           workers=8,
-                                          load_model_path=None,
+                                          load_model_path='experiments/actual/exptest/model.zip',
                                           n_switches=3)
 
     model.save(model_save_path + 'model')

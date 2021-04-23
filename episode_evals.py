@@ -150,11 +150,11 @@ class TwoPhaseFixedEpisode(EvalFunc):
         if not done:
             # if structure action is taken in information phase
             if (self.agent.current_action[0] == 1 or self.agent.current_action[0] == None) and self.steps_this_episode <= self.information_phase_length:
-                reward = -1
+                reward = -0.5
 
             # if listening action is taken in task phase
             elif self.agent.current_action[0] == 0 and self.steps_this_episode > self.information_phase_length:
-                reward = -1
+                reward = -0.5
 
             # if an illegal action was taken
             elif not action_successful and not allow_unsuccessful_actions:
@@ -165,11 +165,11 @@ class TwoPhaseFixedEpisode(EvalFunc):
 
         else:
             # rewards for building correct graphs. Will only be True if episode length is reached
-            if almost_done:
-                reward = 2
-            elif very_almost_done:
-                reward = 5
-            elif learned:
+            # if almost_done:
+            #     reward = 2
+            # elif very_almost_done:
+            #     reward = 5
+            if learned:
                 reward = 30
             else:
                 reward = 0
