@@ -5,6 +5,7 @@ import random
 import networkx as nx
 from tqdm import tqdm
 import pickle
+from abc import ABC, abstractmethod
 
 
 class StructuralCausalModel:
@@ -60,30 +61,29 @@ class StructuralCausalModel:
         random.seed()
         # update exogenous vars
         for key in self.exogenous_vars:
-            self.exogenous_vars[key] = random.choice([True, False])
-            # TODO: understand why parametrized version below produces always the same sequence
-            # dist = self.exogenous_distributions[key]
-            # res = dist[0](**dist[1])
-            # self.exogenous_vars[key] = res
+            if type(self.exogenous_vars[key]) == bool:
+                self.exogenous_vars[key] = random.choice([True, False])
+            else:
+                # TODO: understand why parametrized version below produces always the same sequence for bool
+                dist = self.exogenous_distributions[key]
+                res = dist[0](**dist[1])
+                self.exogenous_vars[key] = res
 
-        # update endogenous vars until converge
-        while True:
-            old_obs = copy.copy(self.endogenous_vars)
+        # update endogenous vars
+        structure_model = CausalGraphGenerator.create_graph_from_scm(self)
+        node_order = [n for n in nx.topological_sort(structure_model)]
+        # propagate causal effects along the topological ordering
+        for node in node_order:
+            # get the values for the parameters needed in the functions
+            params = {}
+            for param in self.functions[node][1]:  # parameters of functions
+                if self.functions[node][1][param] in self.endogenous_vars.keys():
+                    params[param] = self.endogenous_vars[self.functions[node][1][param]]
+                else:
+                    params[param] = self.exogenous_vars[self.functions[node][1][param]]
 
-            for key in old_obs:
-                # get the values for the parameters needed in the functions
-                params = {}
-                for n in self.functions[key][1]:  # parameters of functions
-                    if self.functions[key][1][n] in self.endogenous_vars.keys():
-                        params[n] = self.endogenous_vars[self.functions[key][1][n]]
-                    else:
-                        params[n] = self.exogenous_vars[self.functions[key][1][n]]
-
-                # Update variable according to its function and parameters
-                self.endogenous_vars[key] = self.functions[key][0](**params)
-
-            if old_obs == self.endogenous_vars:
-                break
+            # Update variable according to its function and parameters
+            self.endogenous_vars[node] = self.functions[node][0](**params)
 
         return list(self.endogenous_vars.values()), list(self.exogenous_vars.values())
 
@@ -99,11 +99,7 @@ class StructuralCausalModel:
             self.functions[interv[0]] = (interv[1], {})
 
 
-class BoolSCMGenerator:
-    '''
-    Class to help creating SCMs with boolean variables and relationships as in the switchboard environment
-    '''
-
+class CausalGraphGenerator:
     def __init__(self, n_endo: int, n_exo: int, allow_exo_confounders: bool = False):
         self.allow_exo_confounders = allow_exo_confounders
 
@@ -126,7 +122,18 @@ class BoolSCMGenerator:
 
         self.fully_connected_graph = self._make_fully_connected_dag()
 
-    def create_random(self) -> Tuple[StructuralCausalModel, set]:
+    def _make_fully_connected_dag(self) -> nx.DiGraph:
+        """
+        Creates and returns a fully connected graph. In this graph the exogenous variables have only outgoing edges.
+        """
+        graph = nx.DiGraph()
+        [graph.add_node(u) for u in self.exo_vars]
+        [graph.add_node(v) for v in self.endo_vars]
+        for n, cs in self.potential_causes.items():
+            [graph.add_edge(c, n) for c in cs]
+        return graph
+
+    def create_random_graph(self) -> Tuple[nx.DiGraph, set]:
         """
         Creates and returns a random StructualCausalModel by first creating a fully connected graph and then
         randomly deleting one edge after the other until it is acyclic.
@@ -144,6 +151,55 @@ class BoolSCMGenerator:
             graph.remove_edge(random_edge[0], random_edge[1])
 
         # create scm
+        return graph, removed_edges
+
+    @staticmethod
+    def create_graph_from_scm(scm: StructuralCausalModel) -> nx.DiGraph:
+        graph = nx.DiGraph()
+
+        # create nodes
+        [graph.add_node(var) for var in scm.endogenous_vars]
+
+        for var in scm.functions:
+            for parent in scm.functions[var][1]:
+                if parent in scm.endogenous_vars:
+                    graph.add_edge(parent, var)
+
+        return graph
+
+    @staticmethod
+    def max_n_dags(n_vertices: int) -> int:
+        """
+        Computes the maximal number of different DAGs over n_vertices nodes. Implemented as in Robinson (1973)
+
+        :param n_vertices:
+        :return: max number of dags
+        """
+        if n_vertices < 0:
+            return 0
+        elif n_vertices == 0:
+            return 1
+        else:
+            summ = 0
+            for k in range(1, n_vertices + 1):
+                summ += (-1) ** (k - 1) * comb(n_vertices, k) * 2 ** (
+                        k * (n_vertices - k)) * CausalGraphGenerator.max_n_dags(n_vertices - k)
+            return int(summ)
+
+
+class SCMGenerator(ABC):
+    """Interface for SCM generators"""
+    def __init__(self, n_endo: int, n_exo: int, allow_exo_confounders: bool = False):
+        self.graph_generator = CausalGraphGenerator(n_endo, n_exo, allow_exo_confounders)
+
+    def create_random(self) -> Tuple[StructuralCausalModel, set]:
+        """
+        Creates and returns a random StructualCausalModel by first creating a fully connected graph and then
+        randomly deleting one edge after the other until it is acyclic.
+
+        :return: the random SCM and the set of edges that have been removed
+        """
+        graph, removed_edges = self.graph_generator.create_random_graph()
         return self.create_scm_from_graph(graph), removed_edges
 
     def create_n(self, n: int) -> List[StructuralCausalModel]:
@@ -155,8 +211,8 @@ class BoolSCMGenerator:
         # check whether more DAGs are to be created then combinatorically possible. Only do this if n is not
         # too big becaus computation takes forever for n > 20 and for such values ther exist over 2.3e+72
         # different graphs either way
-        if n > BoolSCMGenerator.max_n_dags(len(self.endo_vars)):
-            n = BoolSCMGenerator.max_n_dags(len(self.endo_vars))
+        if n > CausalGraphGenerator.max_n_dags(len(self.graph_generator.endo_vars)):
+            n = CausalGraphGenerator.max_n_dags(len(self.graph_generator.endo_vars))
 
         scms = []
         rem_edges_list = []
@@ -177,30 +233,27 @@ class BoolSCMGenerator:
 
         return scms
 
-    def _make_fully_connected_dag(self):
-        """
-        Creates and returns a fully connected graph. In this graph the exogenous variables have only outgoing edges.
-        """
-        graph = nx.DiGraph()
-        [graph.add_node(u) for u in self.exo_vars]
-        [graph.add_node(v) for v in self.endo_vars]
-        for n, cs in self.potential_causes.items():
-            [graph.add_edge(c, n) for c in cs]
-        return graph
+    @staticmethod
+    @abstractmethod
+    def create_scm_from_graph(graph: nx.DiGraph) -> StructuralCausalModel:
+        """Defines how an SCM is created from a given causal graph"""
+        pass
 
     @staticmethod
-    def create_graph_from_scm(scm: StructuralCausalModel):
-        graph = nx.DiGraph()
+    @abstractmethod
+    def _make_f(parents: List[str]):
+        """Method that defines how the parents of a node are treated w.r.t. the causal relationship of
+        a variable"""
+        pass
 
-        # create nodes
-        [graph.add_node(var) for var in scm.endogenous_vars]
 
-        for var in scm.functions:
-            for parent in scm.functions[var][1]:
-                if parent in scm.endogenous_vars:
-                    graph.add_edge(parent, var)
+class BoolSCMGenerator(SCMGenerator):
+    '''
+    Class to help creating SCMs with boolean variables and relationships as in the switchboard environment
+    '''
 
-        return graph
+    def __init__(self, n_endo: int, n_exo: int, allow_exo_confounders: bool = False):
+        super(BoolSCMGenerator, self).__init__(n_endo, n_exo, allow_exo_confounders)
 
     @staticmethod
     def create_scm_from_graph(graph: nx.DiGraph) -> StructuralCausalModel:
@@ -236,25 +289,6 @@ class BoolSCMGenerator:
             return res
 
         return f
-
-    @staticmethod
-    def max_n_dags(n_vertices: int) -> int:
-        """
-        Computes the maximal number of different DAGs over n_vertices nodes. Implemented as in Robinson (1973)
-
-        :param n_vertices:
-        :return: max number of dags
-        """
-        if n_vertices < 0:
-            return 0
-        elif n_vertices == 0:
-            return 1
-        else:
-            summ = 0
-            for k in range(1, n_vertices + 1):
-                summ += (-1) ** (k - 1) * comb(n_vertices, k) * 2 ** (
-                            k * (n_vertices - k)) * BoolSCMGenerator.max_n_dags(n_vertices - k)
-            return int(summ)
 
     @staticmethod
     def make_switchboard_scm_with_context():
@@ -311,3 +345,40 @@ class BoolSCMGenerator:
         return dic
 
 
+class DasguptaSCMGenerator(SCMGenerator):
+    """To generate SCMs as described in Dasgupta et al. (2019), Causal Reasoning from Meta-reinforcement Learning"""
+    def __init__(self, n_vars: int):
+        super(DasguptaSCMGenerator, self).__init__(n_vars, 0, False)
+
+    def create_scm_from_graph(self, graph: nx.DiGraph) -> StructuralCausalModel:
+        roots = []
+        for node in graph:
+            n_pred = sum([1 for _ in graph.predecessors(node)])
+            if n_pred == 0:
+                roots.append(node)
+        scm = StructuralCausalModel()
+
+        # add unobserved var
+        exo = roots[0]
+        scm.add_exogenous_var(exo, 0.0, random.gauss, {'mu': 0.0, 'sigma': 0.1})
+
+        # add roots with distribution N(0, 0.1)
+        for root in roots[1:]:
+            scm.add_endogenous_var(root, 0.0, lambda: random.gauss(0.0, 0.1), {})
+
+        # add all others with N(mu=sum(w_{ij}Xj), sigma=0.1) for Xj in PA(Xi) and w_{ij} in [-1, 1]
+        for node in graph:
+            if node not in roots:
+                parents = [p for p in graph.predecessors(node)]
+                scm.add_endogenous_var(node, 0.0, DasguptaSCMGenerator._make_f(parents), {p: p for p in parents})
+
+        return scm
+
+    @staticmethod
+    def _make_f(parents: List[str]):
+        def f(**kwargs):
+            mu = 0.0
+            for p in parents:
+                mu += random.choice([-1, 1]) * kwargs[p]
+            return random.gauss(mu, 0.1)
+        return f

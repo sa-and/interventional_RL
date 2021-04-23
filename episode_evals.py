@@ -98,10 +98,10 @@ class FixedLengthEpisode(EvalFunc):
 
         if not action_successful and not allow_unsuccessful_actions:  # illegal action was taken
             reward = -1
-        elif almost_done:
-            reward = 2
-        elif very_almost_done:
-            reward = 5
+        # elif almost_done:
+        #     reward = 2
+        # elif very_almost_done:
+        #     reward = 5
         elif learned:
             reward = 30
         else:

@@ -1,5 +1,6 @@
 from stable_baselines import ACER
-from Environments import BoolSCMGenerator, Switchboard
+from Environments import Switchboard
+from scm import BoolSCMGenerator, CausalGraphGenerator
 from Agents import DiscreteSwitchboardAgent
 from episode_evals import NoEval
 import networkx as nx
@@ -68,17 +69,17 @@ if __name__ == '__main__':
     model = ACER.load(f'experiments/actual/exptest/model.zip')
     gen = BoolSCMGenerator(4, 4)
     eval_data = BoolSCMGenerator.load_dataset('data/scms/switchboard/4x4var_all.pkl')[:50]
-    eval_data = [BoolSCMGenerator.make_obs_equ_3var_envs()[1]]
+    eval_data = [BoolSCMGenerator.make_obs_equ_3var_envs()[0]]
     differences = []
     for scm in eval_data:
-        target_graph = BoolSCMGenerator.create_graph_from_scm(scm)
+        target_graph = CausalGraphGenerator.create_graph_from_scm(scm)
 
         for run in range(20):
             # from learned policy
             predicted_graph = apply_policy(model=model,
                                            test_scm=scm,
                                            n_vars=3,
-                                           episode_length=20,
+                                           episode_length=30,
                                            display=True)
 
             # from obs based algo

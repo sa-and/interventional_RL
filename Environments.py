@@ -1,5 +1,4 @@
 from typing import List, Callable, Tuple, NoReturn, Any
-
 from gym import Env
 from gym.spaces import Discrete, Box
 from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardAgent,\
@@ -137,7 +136,7 @@ class SwitchboardReservoir(Env):
         for scm in scms:
             agent = agent_type(n_switches)
             if eval_func_type == FixedLengthEpisode:
-                eval_func = eval_func_type(agent, 0.1, 50)
+                eval_func = eval_func_type(agent, 0.1, 30)
             elif eval_func_type == TwoPhaseFixedEpisode:
                 eval_func = eval_func_type(agent, 0.1, 10, 10)
             else:

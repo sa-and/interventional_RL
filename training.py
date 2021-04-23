@@ -18,7 +18,7 @@ def train_switchboard_acer(steps: int,
     board = SwitchboardReservoir(train_scms,
                                  n_switches,
                                  DiscreteSwitchboardAgent,
-                                 TwoPhaseFixedEpisode)
+                                 FixedLengthEpisode)
 
     # data collection phase
     board.collect_interv_data(200)
@@ -33,16 +33,16 @@ def train_switchboard_acer(steps: int,
     # Create new model
     else:
         model = ACER(MlpLstmPolicy, env,
-                     policy_kwargs={'net_arch': ['lstm',
+                     policy_kwargs={'net_arch': [40,
+                                                 'lstm',
                                                  {'pi': [40],
                                                   'vf': [10]}],
-                                    'n_lstm': 40},
+                                    'n_lstm': 50},
 
-                     n_steps=20,
+                     n_steps=5,
                      n_cpu_tf_sess=8,
                      replay_ratio=10,
                      buffer_size=500000,
-                     trust_region=False,
                      gamma=0.999
                      )
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     model, board = train_switchboard_acer(1000000,
                                           train_scms=scms_train,
                                           workers=8,
-                                          load_model_path='experiments/actual/exptest/model.zip',
+                                          load_model_path=None,
                                           n_switches=3)
 
     model.save(model_save_path + 'model')
