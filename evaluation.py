@@ -1,7 +1,7 @@
 from stable_baselines import ACER
-from Environments import Switchboard
+from environments import SCMEnvironment
 from scm import BoolSCMGenerator, CausalGraphGenerator
-from Agents import DiscreteSwitchboardAgent
+from agents import DiscreteAgent
 from episode_evals import NoEval
 import networkx as nx
 import numpy as np
@@ -14,9 +14,9 @@ cdt.SETTINGS.rpath = 'C:/Program Files/R/R-4.0.5/bin/Rscript'
 
 def apply_policy(model, test_scm, n_vars, episode_length, display):
     model_workers = model.n_envs
-    test_evn = a = Switchboard(agent=DiscreteSwitchboardAgent(n_vars),
-                               scm=test_scm,
-                               eval_func=NoEval())
+    test_evn = a = SCMEnvironment(agent=DiscreteAgent(n_vars),
+                                  scm=test_scm,
+                                  eval_func=NoEval())
     # just do this multiple times for easier inspection
     states = model.initial_state
     done = [False for i in range(model_workers)]
@@ -66,7 +66,7 @@ def learn_from_obs(algo):
 
 
 if __name__ == '__main__':
-    model = ACER.load(f'experiments/actual/exptest/model.zip')
+    model = ACER.load(f'experiments/actual/exptesttwo/model.zip')
     gen = BoolSCMGenerator(4, 4)
     eval_data = BoolSCMGenerator.load_dataset('data/scms/switchboard/4x4var_all.pkl')[:50]
     eval_data = [BoolSCMGenerator.make_obs_equ_3var_envs()[0]]

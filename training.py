@@ -1,6 +1,6 @@
 from typing import List
-from Environments import Switchboard, SwitchboardReservoir
-from Agents import DiscreteSwitchboardAgent
+from environments import SCMEnvironment, SCMEnvironmentReservoir
+from agents import DiscreteAgent
 from stable_baselines.common.policies import MlpLstmPolicy
 from stable_baselines import ACER
 import stable_baselines.common.vec_env as venv
@@ -15,13 +15,13 @@ def train_switchboard_acer(steps: int,
                            workers: int = 1,
                            n_switches: int = 3):
 
-    board = SwitchboardReservoir(train_scms,
-                                 n_switches,
-                                 DiscreteSwitchboardAgent,
-                                 FixedLengthEpisode)
+    board = SCMEnvironmentReservoir(train_scms,
+                                    n_switches,
+                                    DiscreteAgent,
+                                    TwoPhaseFixedEpisode)
 
     # data collection phase
-    board.collect_interv_data(200)
+    board.collect_interv_data(500)
     print('data collection phase done\n\n\n\n\n\n\n\n\n\n')
 
     env = venv.SubprocVecEnv([lambda: copy.deepcopy(board) for w in range(workers)], start_method='spawn')
@@ -39,7 +39,7 @@ def train_switchboard_acer(steps: int,
                                                   'vf': [10]}],
                                     'n_lstm': 50},
 
-                     n_steps=5,
+                     n_steps=10,
                      n_cpu_tf_sess=8,
                      replay_ratio=10,
                      buffer_size=500000,
@@ -52,14 +52,14 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exptest/'
+    model_save_path = 'experiments/actual/exptest/'  # fixed is on training 2
 
     # load train and test set
     # exp8, training
     scms = BoolSCMGenerator.load_dataset('data/scms/switchboard/4x4var_all.pkl')
     scms_train = scms[:50]
     scms_train = list(BoolSCMGenerator.make_obs_equ_3var_envs())
-    model, board = train_switchboard_acer(1000000,
+    model, board = train_switchboard_acer(5000000,
                                           train_scms=scms_train,
                                           workers=8,
                                           load_model_path=None,

@@ -19,7 +19,8 @@ class CausalAgent(ABC):
     state_repeats: int
     action_space: Union[Discrete, Box]
 
-    def __init__(self, vars: Union[int, List[str]], causal_graph: StructureModel = None):
+    def __init__(self, vars: Union[int, List[str]], causal_graph: StructureModel = None, env_type: str = 'Switchboard'):
+        self.env_type = env_type
         if type(vars) == int:
             self.var_names = ['x' + str(i) for i in range(vars)]
         else:
@@ -137,11 +138,18 @@ class CausalAgent(ABC):
 
         if '(' + edge[0] + ',True)' in self.collected_data and '(' + edge[0] + ',False)' in self.collected_data:
             est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
-
-            if est_causal_effect >= threshold:
+            if abs(est_causal_effect) >= threshold:
                 return True
             else:
                 return False
+
+        elif '(' + edge[0] + ',0.0)' in self.collected_data and '(' + edge[0] + ',5.0)' in self.collected_data:
+            est_causal_effect = self.get_est_avg_causal_effect(edge[1], edge[0], 0.0, 5.0)
+            if abs(est_causal_effect) >= threshold:
+                return True
+            else:
+                return False
+
         return True
 
     def has_wrong_edges(self, threshold: float = 0.0) -> int:
@@ -190,9 +198,13 @@ class CausalAgent(ABC):
         else:
             if '(' + edge[0] + ',True)' in self.collected_data and '(' + edge[0] + ',False)' in self.collected_data:
                 effect = self.get_est_avg_causal_effect(edge[1], edge[0], True, False)
-                return effect >= threshold
+                return abs(effect) >= threshold
+            elif '(' + edge[0] + ',0.0)' in self.collected_data and '(' + edge[0] + ',5.0)' in self.collected_data:
+                effect = self.get_est_avg_causal_effect(edge[1], edge[0], 0.0, 5.0)
+                return abs(effect) >= threshold
             else:
                 return True
+
         
     def has_missing_edges(self, threshold: float = 0.0) -> int:
         '''
@@ -334,19 +346,26 @@ class CausalAgent(ABC):
         raise NotImplementedError
 
 
-class DiscreteSwitchboardAgent(CausalAgent):
+class DiscreteAgent(CausalAgent):
     current_mode: str
-    action = Tuple[Optional[int], Optional[Union[int, Tuple[str, str]]], Optional[Union[bool, int]]]
-    actions: List[action]
     state_repeats: int
 
-    def __init__(self, n_switches: int, causal_graph: StructureModel = None, state_repeats: int = 1):
-        super(DiscreteSwitchboardAgent, self).__init__(n_switches, causal_graph)
+    def __init__(self, n_vars: int, causal_graph: StructureModel = None, state_repeats: int = 1, env_type: str = 'Switchboard'):
+        super(DiscreteAgent, self).__init__(n_vars, causal_graph, env_type)
+        # create a list of actions that can be performed
+        if self.env_type == 'Switchboard':
+            # actions for interventions represented as (0, variable, value)
+            self.actions = [(0, i, True) for i in range(n_vars)]
+            self.actions.extend([(0, i, False) for i in range(n_vars)])
+            self.observation_space = Box(0, 1,
+                                         (state_repeats * (int((n_vars * 2) + n_vars * (n_vars - 1) / 2)),))
+        elif self.env_type == 'Dasgupta':
+            self.actions = [(0, i, 5.0) for i in range(n_vars)]
+            self.actions.extend([(0, i, 0.0) for i in range(n_vars)])
+            self.observation_space = Box(-7.0, 7.0, (state_repeats*(int((n_vars * 2) + n_vars * (n_vars - 1) / 2)),))
+        else:
+            raise NotImplementedError('Environment type not supported. Choose "Switchboard" or "Dasgupta"')
 
-        # create a list of actions that can be performed on the switchboard
-        # actions for interventions represented as (0, variable, value)
-        self.actions = [(0, i, True) for i in range(n_switches)]
-        self.actions.extend([(0, i, False) for i in range(n_switches)])
         # actions for graph manipulation represented as (1, edge, operation)
         # where operation can be one of: delete = 0, add = 1, reverse = 2
         edges = [e for e in combinations(self.var_names, 2)]
@@ -359,7 +378,6 @@ class DiscreteSwitchboardAgent(CausalAgent):
 
         self.action_space = Discrete(len(self.actions))
         self.state_repeats = state_repeats
-        self.observation_space = Box(0, 1, (state_repeats*(int((n_switches * 2) + n_switches * (n_switches - 1) / 2)),))
 
     def store_observation_per_action(self, obs: List[bool]):
         if self.current_action[0] == 1 or self.current_action[0] == None:  # no itervention
@@ -367,7 +385,7 @@ class DiscreteSwitchboardAgent(CausalAgent):
         else:
             self.store_observation(obs, self.var_names[self.current_action[1]], self.current_action[2])
 
-    def update_model_per_action(self, action: action) -> bool:
+    def update_model_per_action(self, action) -> bool:
         '''Updates model according to action and returns the success of the operation'''
         assert action[0] == 1, "Action is not a b model manipulation."
         edge = action[1]

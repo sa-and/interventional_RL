@@ -84,7 +84,6 @@ class StructuralCausalModel:
 
             # Update variable according to its function and parameters
             self.endogenous_vars[node] = self.functions[node][0](**params)
-
         return list(self.endogenous_vars.values()), list(self.exogenous_vars.values())
 
     def do_interventions(self, interventions: List[Tuple[str, Callable]]):
@@ -372,13 +371,41 @@ class DasguptaSCMGenerator(SCMGenerator):
                 parents = [p for p in graph.predecessors(node)]
                 scm.add_endogenous_var(node, 0.0, DasguptaSCMGenerator._make_f(parents), {p: p for p in parents})
 
+        # rename vars
+        scm.exogenous_vars['U0'] = scm.exogenous_vars.pop(exo)
+        scm.exogenous_distributions['U0'] = scm.exogenous_distributions.pop(exo)
+        var_names = ['X'+str(i) for i in range(len(scm.endogenous_vars))]
+        random.shuffle(var_names)
+
+        new_endo = {}
+        changes = {}
+        for var in scm.endogenous_vars:
+            new_name = var_names.pop()
+            new_endo[new_name] = scm.endogenous_vars[var]
+            changes[var] = new_name
+
+        # rename functions and params
+        new_func = {}
+        for var in scm.functions:
+            new_params = {}
+            for p in scm.functions[var][1]:
+                if p == exo:
+                    new_params['U0'] = 'U0'
+                else:
+                    new_params[changes[p]] = changes[p]
+            new_func[changes[var]] = (DasguptaSCMGenerator._make_f([p for p in new_params]), new_params)
+
+        scm.endogenous_vars = dict(sorted(new_endo.items()))
+        scm.functions = dict(sorted(new_func.items()))
         return scm
 
     @staticmethod
     def _make_f(parents: List[str]):
+        weights = {p: random.choice([-1, 1]) for p in parents}
+
         def f(**kwargs):
             mu = 0.0
             for p in parents:
-                mu += random.choice([-1, 1]) * kwargs[p]
+                mu += weights[p] * kwargs[p]
             return random.gauss(mu, 0.1)
         return f

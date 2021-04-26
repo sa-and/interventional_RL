@@ -1,7 +1,7 @@
 from typing import List, Callable, Tuple, NoReturn, Any
 from gym import Env
 from gym.spaces import Discrete, Box
-from Agents import CausalAgent, DiscreteSwitchboardAgent, ContinuousSwitchboardAgent,\
+from agents import CausalAgent, DiscreteAgent, ContinuousSwitchboardAgent,\
     get_switchboard_causal_graph, get_almost_right_switchboard_causal_graph, get_blank_switchboard_causal_graph
 import copy
 import numpy as np
@@ -11,25 +11,24 @@ from episode_evals import EvalFunc, EachStepGoalCheck, FixedLengthEpisode, TwoPh
 from tqdm import tqdm
 
 
-class Switchboard(Env):
-    Agent: DiscreteSwitchboardAgent
+class SCMEnvironment(Env):
+    Agent: DiscreteAgent
     Function = Callable[[], bool]
     Lights: List[bool]
 
     def __init__(self, agent: CausalAgent,
                  eval_func: EvalFunc,
                  scm: StructuralCausalModel = BoolSCMGenerator.make_switchboard_scm_without_context()):
-        super(Switchboard, self).__init__()
+        super(SCMEnvironment, self).__init__()
         self.metrics = {'ep_lengths': [],
                         'rewards': []}
         self.eval_func = eval_func
 
         # initialize causal model
         self.SCM = scm
+        self.var_values = self.SCM.get_next_instantiation()[0]
 
-        self.lights = [False]*len(self.SCM.endogenous_vars)  # all lights are off
-
-        assert type(agent) == DiscreteSwitchboardAgent or type(agent) == ContinuousSwitchboardAgent, \
+        assert type(agent) == DiscreteAgent or type(agent) == ContinuousSwitchboardAgent, \
             'Wrong agent for this environment'
 
         self.agent = agent
@@ -72,9 +71,9 @@ class Switchboard(Env):
         self.steps_this_episode += 1
 
         # determine the states of the lights according to the causal structure
-        self.lights = interv_scm.get_next_instantiation()[0]
+        self.var_values = interv_scm.get_next_instantiation()[0]
 
-        self.agent.store_observation_per_action(self.lights)
+        self.agent.store_observation_per_action(self.var_values)
 
         # reverse all wrong edges, this could eventually speed up learning
         #self.agent.reverse_wrong_edges(0.1)
@@ -101,9 +100,9 @@ class Switchboard(Env):
         for i in range(1, len(self.old_obs)):
             self.old_obs[i-1] = self.old_obs[i]
             
-        intervention_one_hot = [1.0 if self.agent.current_action[1] == i else 0.0 for i in range(len(self.lights))]
+        intervention_one_hot = [1.0 if self.agent.current_action[1] == i else 0.0 for i in range(len(self.var_values))]
         graph_state = self.agent.get_graph_state()
-        state = [float(l) for l in self.lights]  # convert bool to int
+        state = [float(l) for l in self.var_values]  # convert bool to float
         state.extend(intervention_one_hot)
         state.extend(graph_state)
         self.old_obs[-1] = state
@@ -113,8 +112,8 @@ class Switchboard(Env):
     def render(self, mode: str = 'human') -> NoReturn:
         if mode == 'human':
             out = ''
-            for i in range(len(self.lights)):
-                if self.lights[i]:
+            for i in range(len(self.var_values)):
+                if self.var_values[i]:
                     out += '|'
                 else:
                     out += 'O'
@@ -124,24 +123,24 @@ class Switchboard(Env):
             print(out)
 
 
-class SwitchboardReservoir(Env):
-    envs: List[Switchboard]
+class SCMEnvironmentReservoir(Env):
+    envs: List[SCMEnvironment]
 
     def __init__(self, scms: List[StructuralCausalModel],
-                 n_switches: int,
+                 n_vars: int,
                  agent_type: type(CausalAgent),
                  eval_func_type: type(EvalFunc)):
 
         self.envs = []
         for scm in scms:
-            agent = agent_type(n_switches)
+            agent = agent_type(n_vars)
             if eval_func_type == FixedLengthEpisode:
-                eval_func = eval_func_type(agent, 0.1, 30)
+                eval_func = eval_func_type(agent, 3.0, 30)
             elif eval_func_type == TwoPhaseFixedEpisode:
-                eval_func = eval_func_type(agent, 0.1, 10, 10)
+                eval_func = eval_func_type(agent, 3.0, 15, 15)
             else:
                 raise NotImplementedError('environment has not implementation for this evaluation function')
-            self.envs.append(Switchboard(agent, eval_func, scm))
+            self.envs.append(SCMEnvironment(agent, eval_func, scm))
 
         self.current_env = self.envs[0]
         self.action_space = self.current_env.action_space
