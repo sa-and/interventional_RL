@@ -245,6 +245,12 @@ class SCMGenerator(ABC):
         a variable"""
         pass
 
+    @staticmethod
+    def load_dataset(path: str) -> List[StructuralCausalModel]:
+        with open(path, 'rb') as f:
+            dic = pickle.load(f)
+        return dic
+
 
 class BoolSCMGenerator(SCMGenerator):
     '''
@@ -336,12 +342,6 @@ class BoolSCMGenerator(SCMGenerator):
              ('X1', False, lambda x0: x0, {'x0': 'X0'}),
              ('X2', False, lambda x0: x0, {'x0': 'X0'})])
         return scm1, scm2
-
-    @staticmethod
-    def load_dataset(path: str) -> List[StructuralCausalModel]:
-        with open(path, 'rb') as f:
-            dic = pickle.load(f)
-        return dic
 
 
 class DasguptaSCMGenerator(SCMGenerator):

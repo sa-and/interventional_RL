@@ -133,11 +133,11 @@ class SCMEnvironmentReservoir(Env):
 
         self.envs = []
         for scm in scms:
-            agent = agent_type(n_vars)
+            agent = agent_type(n_vars, env_type='Dasgupta')
             if eval_func_type == FixedLengthEpisode:
-                eval_func = eval_func_type(agent, 3.0, 30)
+                eval_func = eval_func_type(agent, 4.0, 30)
             elif eval_func_type == TwoPhaseFixedEpisode:
-                eval_func = eval_func_type(agent, 3.0, 15, 15)
+                eval_func = eval_func_type(agent, 4.0, 15, 15)
             else:
                 raise NotImplementedError('environment has not implementation for this evaluation function')
             self.envs.append(SCMEnvironment(agent, eval_func, scm))
