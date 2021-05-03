@@ -34,6 +34,7 @@ def train_switchboard_acer(steps: int,
     else:
         model = ACER(MlpLstmPolicy, env,
                      policy_kwargs={'net_arch': [50,
+                                                 50,
                                                  'lstm',
                                                  {'pi': [40],
                                                   'vf': [10]}],
@@ -52,16 +53,16 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exp9/'  # fixed is on training 2
+    model_save_path = 'experiments/actual/exp12/'
 
     # load train and test set
     # exp8, training
-    scms = BoolSCMGenerator.load_dataset('data/scms/Dasgupta/4x1_25000.pkl')
-    scms_train = scms[:10000]
-    model, board = train_switchboard_acer(10000000,
+    scms = BoolSCMGenerator.load_dataset('data/scms/gauss/4x0_542.pkl')
+    scms_train = scms[:500]
+    model, board = train_switchboard_acer(1000000,
                                           train_scms=scms_train,
-                                          workers=4,
-                                          load_model_path='experiments/actual/exp9/model.zip',
+                                          workers=8,
+                                          load_model_path=None,
                                           n_switches=4)
 
     model.save(model_save_path + 'model')

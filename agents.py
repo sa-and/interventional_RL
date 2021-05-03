@@ -359,12 +359,12 @@ class DiscreteAgent(CausalAgent):
             self.actions.extend([(0, i, False) for i in range(n_vars)])
             self.observation_space = Box(0, 1,
                                          (state_repeats * (int((n_vars * 2) + n_vars * (n_vars - 1) / 2)),))
-        elif self.env_type == 'Dasgupta':
+        elif self.env_type == 'Gauss':
             self.actions = [(0, i, 5.0) for i in range(n_vars)]
             self.actions.extend([(0, i, 0.0) for i in range(n_vars)])
             self.observation_space = Box(-7.0, 7.0, (state_repeats*(int((n_vars * 2) + n_vars * (n_vars - 1) / 2)),))
         else:
-            raise NotImplementedError('Environment type not supported. Choose "Switchboard" or "Dasgupta"')
+            raise NotImplementedError('Environment type not supported. Choose "Switchboard" or "Gauss"')
 
         # actions for graph manipulation represented as (1, edge, operation)
         # where operation can be one of: delete = 0, add = 1, reverse = 2

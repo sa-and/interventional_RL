@@ -252,6 +252,36 @@ class SCMGenerator(ABC):
         return dic
 
 
+class GaussSCMGenerator(SCMGenerator):
+    '''Class to create scms where every var except the roots are distributed as sum_ij(wijXi) + n with n \sim N(0, 0.1). This is
+    a general case of the dasgupta environment. So eventually those two classes can probably be combined.'''
+    def __init__(self, n_endo: int, n_exo: int, allow_exo_confounders: bool = False):
+        super(GaussSCMGenerator, self).__init__(n_endo, n_exo, allow_exo_confounders)
+
+    @staticmethod
+    def create_scm_from_graph(graph: nx.DiGraph) -> StructuralCausalModel:
+        scm = StructuralCausalModel()
+        for n in graph.nodes:
+            parents = [p for p in graph.predecessors(n)]
+            if n[0] == 'X':
+                scm.add_endogenous_var(n, 0.0, GaussSCMGenerator._make_f(parents), {p: p for p in parents})
+            else:
+                scm.add_exogenous_var(n, 0.0, random.gauss, {'mu': 0.0, 'sigma': 0.1})
+        return scm
+
+    @staticmethod
+    def _make_f(parents: List[str]):
+        weights = {p: random.choice([-1, -0.8, -0.6, -0.4, -0.2, 0.2, 0.4, 0.6, 0.8, 1]) for p in parents}
+
+        def f(**kwargs):
+            mu = 0.0
+            for p in parents:
+                mu += weights[p] * kwargs[p]
+            return mu + random.gauss(0.0, 0.1)
+
+        return f
+
+
 class BoolSCMGenerator(SCMGenerator):
     '''
     Class to help creating SCMs with boolean variables and relationships as in the switchboard environment

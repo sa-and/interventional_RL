@@ -133,7 +133,7 @@ class SCMEnvironmentReservoir(Env):
 
         self.envs = []
         for scm in scms:
-            agent = agent_type(n_vars, env_type='Dasgupta')
+            agent = agent_type(n_vars, env_type='Gauss')
             if eval_func_type == FixedLengthEpisode:
                 eval_func = eval_func_type(agent, 4.0, 30)
             elif eval_func_type == TwoPhaseFixedEpisode:
