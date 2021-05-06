@@ -9,6 +9,7 @@ from itertools import combinations, permutations
 import random
 from gym.spaces import Discrete, Box
 import numpy as np
+from timeit import default_timer as timer
 
 
 class CausalAgent(ABC):
@@ -32,7 +33,7 @@ class CausalAgent(ABC):
         else:
             self.causal_model = StructureModel()
             [self.causal_model.add_node(name) for name in self.var_names]
-            self.random_reset_causal_model()
+            self.reset_causal_model()
 
         # initialize the storages for observational and interventional data.
         self.collected_data = {}
@@ -46,11 +47,20 @@ class CausalAgent(ABC):
     def set_causal_model(self, causal_model: StructureModel):
         self.causal_model = causal_model
 
-    def random_reset_causal_model(self):
+    def reset_causal_model(self, mode: str = 'random'):
         all_pairs = [(v[0], v[1]) for v in permutations(self.var_names, 2)]
-        random.shuffle(all_pairs)
-        for p in all_pairs:
-            self.update_model(p, random.choice([0, 1, 2]))
+
+        if mode == 'random':
+            random.shuffle(all_pairs)
+            for p in all_pairs:
+                self.update_model(p, random.choice([0, 1, 2]))
+
+        elif mode == 'empty':
+            # delete all edges
+            for p in all_pairs:
+                self.update_model(p, 0)
+        else:
+            raise TypeError('No reset defined for mode ' + mode)
 
     def update_model(self, edge: Tuple[str, str],
                      manipulation: int,
@@ -204,7 +214,6 @@ class CausalAgent(ABC):
                 return abs(effect) >= threshold
             else:
                 return True
-
         
     def has_missing_edges(self, threshold: float = 0.0) -> int:
         '''

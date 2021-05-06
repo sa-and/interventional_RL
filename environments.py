@@ -5,9 +5,9 @@ from agents import CausalAgent, DiscreteAgent, ContinuousSwitchboardAgent,\
     get_switchboard_causal_graph, get_almost_right_switchboard_causal_graph, get_blank_switchboard_causal_graph
 import copy
 import numpy as np
-from scm import StructuralCausalModel, BoolSCMGenerator
+from scm import StructuralCausalModel, BoolSCMGenerator, CausalGraphGenerator
 import random
-from episode_evals import EvalFunc, EachStepGoalCheck, FixedLengthEpisode, TwoPhaseFixedEpisode
+from episode_evals import EvalFunc, StructureEvalFunc, FixedLengthStructEpisode, EachStepInfGoalCheck, FixedLengthInfEpisode, TwoPhaseFixedInfEpisode
 from tqdm import tqdm
 
 
@@ -27,6 +27,8 @@ class SCMEnvironment(Env):
         # initialize causal model
         self.SCM = scm
         self.var_values = self.SCM.get_next_instantiation()[0]
+        if type(eval_func) == StructureEvalFunc:
+            eval_func.set_compare_graph(CausalGraphGenerator.create_graph_from_scm(self.SCM))
 
         assert type(agent) == DiscreteAgent or type(agent) == ContinuousSwitchboardAgent, \
             'Wrong agent for this environment'
@@ -46,7 +48,7 @@ class SCMEnvironment(Env):
     def reset(self) -> np.ndarray:
         self.steps_this_episode = 0
         # self.agent.set_causal_model(get_blank_switchboard_causal_graph())
-        self.agent.random_reset_causal_model()
+        self.agent.reset_causal_model(mode='empty')
         # reset observations
         self.old_obs = []
         for i in range(self.agent.state_repeats):
@@ -73,7 +75,9 @@ class SCMEnvironment(Env):
         # determine the states of the lights according to the causal structure
         self.var_values = interv_scm.get_next_instantiation()[0]
 
-        self.agent.store_observation_per_action(self.var_values)
+        # TODO: is the next line really needed given we already collect data in the beginning? with the right impleme
+        # ntation this could also allow for computing estimated causal effects only once and not at every episode.
+        # self.agent.store_observation_per_action(self.var_values)
 
         # reverse all wrong edges, this could eventually speed up learning
         #self.agent.reverse_wrong_edges(0.1)
@@ -134,10 +138,13 @@ class SCMEnvironmentReservoir(Env):
         self.envs = []
         for scm in scms:
             agent = agent_type(n_vars, env_type='Gauss')
-            if eval_func_type == FixedLengthEpisode:
-                eval_func = eval_func_type(agent, 4.0, 30)
-            elif eval_func_type == TwoPhaseFixedEpisode:
-                eval_func = eval_func_type(agent, 4.0, 15, 15)
+            if eval_func_type == FixedLengthInfEpisode:
+                eval_func = eval_func_type(agent, 0.9, 30)
+            elif eval_func_type == TwoPhaseFixedInfEpisode:
+                eval_func = eval_func_type(agent, 0.9, 15, 15)
+            elif eval_func_type == FixedLengthStructEpisode:
+                rand_graph = CausalGraphGenerator(n_vars, 0).create_random_graph()[0]
+                eval_func = eval_func_type(agent, graph=rand_graph, ep_length=30)
             else:
                 raise NotImplementedError('environment has not implementation for this evaluation function')
             self.envs.append(SCMEnvironment(agent, eval_func, scm))
@@ -176,6 +183,7 @@ class SCMEnvironmentReservoir(Env):
                     pass
                 else:
                     e.step(action)
+                    e.agent.store_observation_per_action(e.last_observation)
                     i += 1
                     bar.update(1)
 

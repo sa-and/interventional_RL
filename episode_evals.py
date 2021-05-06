@@ -1,20 +1,38 @@
 from abc import ABC, abstractmethod
 from typing import Tuple
 from agents import CausalAgent
+import networkx as nx
+from scm import CausalGraphGenerator
+
+
+def directed_shd(predicted: nx.DiGraph, target: nx.DiGraph) -> int:
+    assert len(predicted.nodes) == len(target.nodes), 'Graphs need to have the same amount of nodes'
+
+    # this corresponds to the SHD (structural Hamming distance or SHD (Tsamardinos et al., 2006;
+    # with the difference that we consider undirected edges as bidirected edges and flip is considered
+    # as 2 errors instead of 1
+    differences = 0
+    for node in predicted.adj:
+        # check which edges are too much in the predicted graph
+        for parent in predicted.adj[node]:
+            if not parent.upper() in target.adj[node.upper()]:
+                differences += 1
+        # check which edges are missing in the predicted graph
+        for parent in target.adj[node.upper()]:
+            if not parent.lower() in predicted.adj[node]:
+                differences += 1
+
+    return differences
 
 
 class EvalFunc(ABC):
-    """
-    Interface for evaluating each step for the interventional RL environments
-    """
-    agent: CausalAgent
+    """Interface for evaluation function for the RL learning"""
     effect_threshold: float
     steps_this_episode: int
 
-    def __init__(self, agent: CausalAgent, effect_threshold: float):
+    def __init__(self, agent: CausalAgent):
         super(EvalFunc, self).__init__()
         self.agent = agent
-        self.effect_threshold = effect_threshold
         self.steps_this_episode = 0
 
     @abstractmethod
@@ -28,6 +46,67 @@ class EvalFunc(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def _eval_model(self):
+        """Defines how the model is evaluated"""
+        raise NotImplementedError
+
+
+# ----------------------------------------------------------------------------
+# Functions evaluating the model based on the structural difference to the target graph
+class StructureEvalFunc(EvalFunc):
+    def __init__(self, agent: CausalAgent, graph: nx.DiGraph):
+        super(StructureEvalFunc, self).__init__(agent)
+        self.compare_graph = graph
+
+    def set_compare_graph(self, graph: nx.DiGraph):
+        self.compare_graph = graph
+
+    def _eval_model(self):
+        diff = directed_shd(self.agent.causal_model, self.compare_graph)**3
+        return -diff
+
+
+class FixedLengthStructEpisode(StructureEvalFunc):
+    def __init__(self, agent: CausalAgent, graph: nx.DiGraph, ep_length: int):
+        super(FixedLengthStructEpisode, self).__init__(agent, graph)
+        self.episode_length = ep_length
+
+    def evaluate_step(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
+        self.steps_this_episode += 1
+
+        done = False
+        # Evaluate when the episode length is reached
+        if self.steps_this_episode >= self.episode_length:
+            done = True
+            self.steps_this_episode = 0
+            reward = self._eval_model()
+            if reward == 0:
+                reward = 30
+
+        elif not action_successful and not allow_unsuccessful_actions:  # illegal action was taken
+            reward = -1
+        else:
+            reward = 0
+
+        if done:
+            print('episode reward', reward)
+
+        return done, reward
+
+# ----------------------------------------------------------------------------
+# Functions comparing the causal structure of the model to the interventional data that has been collected
+class InferenceEvalFunc(EvalFunc):
+    """
+    Interface for evaluating each step for the interventional RL environments based on the inference
+    power the estimated graph has w.r.t. the collected interventional data
+    """
+    agent: CausalAgent
+
+    def __init__(self, agent: CausalAgent, effect_threshold: float):
+        super(InferenceEvalFunc, self).__init__(agent)
+        self.effect_threshold = effect_threshold
+
     def _eval_model(self):
         n_wrong_edges = self.agent.has_wrong_edges(self.effect_threshold)
         n_missing_edges = self.agent.has_missing_edges(self.effect_threshold)
@@ -37,10 +116,10 @@ class EvalFunc(ABC):
         return learned, very_almost_done, almost_done
 
 
-class EachStepGoalCheck(EvalFunc):
-    # WARNING: This class was not tested extensively as it will not be used (for now)
+class EachStepInfGoalCheck(InferenceEvalFunc):
+    # WARNING: Outdated. This class was not tested extensively as it will not be used (for now)
     def __init__(self, agent: CausalAgent, effect_threshold: float):
-        super(EachStepGoalCheck, self).__init__(agent, effect_threshold)
+        super(EachStepInfGoalCheck, self).__init__(agent, effect_threshold)
 
     def evaluate_step(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
         """
@@ -71,11 +150,11 @@ class EachStepGoalCheck(EvalFunc):
         return done, reward
 
 
-class FixedLengthEpisode(EvalFunc):
+class FixedLengthInfEpisode(InferenceEvalFunc):
     length_per_episode: int
 
     def __init__(self, agent: CausalAgent, effect_threshold: float, length_per_episode: int):
-        super(FixedLengthEpisode, self).__init__(agent, effect_threshold)
+        super(FixedLengthInfEpisode, self).__init__(agent, effect_threshold)
         self.length_per_episode = length_per_episode
 
     def evaluate_step(self, action_successful: bool, allow_unsuccessful_actions: bool = True) -> Tuple[bool, float]:
@@ -113,7 +192,7 @@ class FixedLengthEpisode(EvalFunc):
         return done, reward
 
 
-class TwoPhaseFixedEpisode(EvalFunc):
+class TwoPhaseFixedInfEpisode(InferenceEvalFunc):
     information_phase_length: int
     task_phase_length: int
 
@@ -121,7 +200,7 @@ class TwoPhaseFixedEpisode(EvalFunc):
                  effect_threshold: float,
                  information_phase_length: int,
                  task_phase_length: int):
-        super(TwoPhaseFixedEpisode, self).__init__(agent, effect_threshold)
+        super(TwoPhaseFixedInfEpisode, self).__init__(agent, effect_threshold)
         self.information_phase_length = information_phase_length
         self.task_phase_length = task_phase_length
         self.rewards = []
@@ -182,7 +261,7 @@ class TwoPhaseFixedEpisode(EvalFunc):
         return done, reward
 
 
-class NoEval(EvalFunc):
+class NoEval(InferenceEvalFunc):
     """Does nothing. Used when applying the policy so there are no prints and rewards"""
     def __init__(self):
         super(NoEval, self).__init__(None, None)

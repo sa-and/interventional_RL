@@ -6,7 +6,7 @@ from stable_baselines import ACER
 import stable_baselines.common.vec_env as venv
 from scm import StructuralCausalModel, BoolSCMGenerator
 import copy
-from episode_evals import FixedLengthEpisode, TwoPhaseFixedEpisode
+from episode_evals import FixedLengthInfEpisode, TwoPhaseFixedInfEpisode, FixedLengthStructEpisode
 
 
 def train_switchboard_acer(steps: int,
@@ -18,10 +18,10 @@ def train_switchboard_acer(steps: int,
     board = SCMEnvironmentReservoir(train_scms,
                                     n_switches,
                                     DiscreteAgent,
-                                    FixedLengthEpisode)
+                                    FixedLengthInfEpisode)
 
     # data collection phase
-    board.collect_interv_data(80)
+    board.collect_interv_data(160)
     print('data collection phase done\n\n\n\n\n\n\n\n\n\n')
 
     env = venv.SubprocVecEnv([lambda: copy.deepcopy(board) for w in range(workers)], start_method='spawn')
@@ -33,12 +33,11 @@ def train_switchboard_acer(steps: int,
     # Create new model
     else:
         model = ACER(MlpLstmPolicy, env,
-                     policy_kwargs={'net_arch': [50,
-                                                 50,
+                     policy_kwargs={'net_arch': [40,
                                                  'lstm',
                                                  {'pi': [40],
                                                   'vf': [10]}],
-                                    'n_lstm': 120},
+                                    'n_lstm': 80},
 
                      n_steps=30,
                      n_cpu_tf_sess=8,
@@ -53,17 +52,17 @@ def train_switchboard_acer(steps: int,
 
 
 if __name__ == '__main__':
-    model_save_path = 'experiments/actual/exp12/'
+    model_save_path = 'experiments/actual/exptest/'
 
     # load train and test set
     # exp8, training
-    scms = BoolSCMGenerator.load_dataset('data/scms/gauss/4x0_542.pkl')
-    scms_train = scms[:500]
-    model, board = train_switchboard_acer(1000000,
+    scms = BoolSCMGenerator.load_dataset('data/scms/gauss/3x0_24.pkl')
+    scms_train = scms[:18]
+    model, board = train_switchboard_acer(1000000,  # 2mio
                                           train_scms=scms_train,
                                           workers=8,
-                                          load_model_path=None,
-                                          n_switches=4)
+                                          load_model_path='experiments/actual/exptest/model.zip',
+                                          n_switches=3)
 
     model.save(model_save_path + 'model')
 

@@ -3,7 +3,7 @@ from stable_baselines import ACER
 from environments import SCMEnvironment
 import stable_baselines.common.vec_env as venv
 from agents import DiscreteAgent
-from episode_evals import FixedLengthEpisode
+from episode_evals import FixedLengthInfEpisode
 from stable_baselines.common.policies import MlpLstmPolicy
 import dill
 
@@ -11,7 +11,7 @@ import dill
 def make_sb(scm):
     def f():
         agent = DiscreteAgent(4, env_type='Gauss')
-        return SCMEnvironment(agent, FixedLengthEpisode(agent, 3, 30), scm=scm)
+        return SCMEnvironment(agent, FixedLengthInfEpisode(agent, 3, 30), scm=scm)
     return f
 
 
